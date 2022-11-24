@@ -21,12 +21,15 @@
 use std::marker::PhantomData;
 
 #[derive(Debug)]
-enum Literal {
+enum Literal
+{
     String(&'static str),
 }
 
-impl Literal {
-    fn synthesize(&self) -> LiteralType {
+impl Literal
+{
+    fn synthesize(&self) -> LiteralType
+    {
         match self {
             Literal::String(_) => LiteralType::String,
         }
@@ -34,33 +37,41 @@ impl Literal {
 }
 
 #[derive(Debug)]
-enum Expression {
-    Literal {
-        literal: Literal,
+enum Expression
+{
+    Literal
+    {
+        literal: Literal
     },
-    Variable {
-        name: &'static str,
+    Variable
+    {
+        name: &'static str
     },
-    Application {
+    Application
+    {
         function: Box<Expression>,
         argument: Box<Expression>,
     },
-    Abstraction {
+    Abstraction
+    {
         parameter: &'static str,
         body: Box<Expression>,
     },
-    Tuple {
+    Tuple
+    {
         first: Box<Expression>,
         second: Box<Expression>,
     },
 }
 
-impl Expression {
+impl Expression
+{
     fn synthesize<'ctx>(
         &self,
         state: &mut State,
         context: &'ctx mut Context,
-    ) -> (Type, &'ctx mut Context) {
+    ) -> (Type, &'ctx mut Context)
+    {
         match self {
             Expression::Literal { literal } => (
                 Type::Literal {
@@ -117,11 +128,13 @@ impl Expression {
         ty: &Type,
         state: &mut State,
         context: &'ctx mut Context,
-    ) -> (Type, &'ctx mut Context) {
+    ) -> (Type, &'ctx mut Context)
+    {
         match ty {
             Type::Function { from, to } => {
                 let delta = self.checks_against(&from.fetch(state), state, context);
-                return (to.fetch(state), delta);
+
+                (to.fetch(state), delta)
             }
             _ => unreachable!(),
         }
@@ -132,8 +145,9 @@ impl Expression {
         ty: &Type,
         state: &mut State,
         context: &'ctx mut Context,
-    ) -> &'ctx mut Context {
-        assert!(ty.is_well_formed(&context, state));
+    ) -> &'ctx mut Context
+    {
+        assert!(ty.is_well_formed(context, state));
         match (self, &ty) {
             (Expression::Literal { literal }, Type::Literal { ty }) => unimplemented!(),
             (Expression::Abstraction { parameter, body }, Type::Function { from, to }) => {
@@ -161,12 +175,14 @@ impl Expression {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum LiteralType {
+enum LiteralType
+{
     String,
 }
 
 #[derive(Debug, Eq, Clone, Copy)]
-struct Index<T> {
+struct Index<T>
+{
     index: usize,
     phantom: PhantomData<T>,
 }
@@ -191,37 +207,46 @@ where
     }
 }
 
-impl<T> PartialEq for Index<T> {
-    fn eq(&self, _other: &Self) -> bool {
+impl<T> PartialEq for Index<T>
+{
+    fn eq(&self, _other: &Self) -> bool
+    {
         // NOTE: We don't care about the index, just the value it points to
         true
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum Type {
-    Literal {
-        ty: LiteralType,
+enum Type
+{
+    Literal
+    {
+        ty: LiteralType
     },
-    Existential {
-        id: u64,
+    Existential
+    {
+        id: u64
     },
-    Function {
-        from: Index<Type>,
-        to: Index<Type>,
+    Function
+    {
+        from: Index<Type>, to: Index<Type>
     },
-    Quantification {
+    Quantification
+    {
         variable_name: &'static str,
         codomain: Index<Type>,
     },
-    Product {
+    Product
+    {
         left: Index<Type>,
         right: Index<Type>,
     },
 }
 
-impl Type {
-    fn store(self, state: &mut State) -> Index<Self> {
+impl Type
+{
+    fn store(self, state: &mut State) -> Index<Self>
+    {
         let index = state.types.len();
         state.types.push(self);
 
@@ -231,7 +256,8 @@ impl Type {
         }
     }
 
-    fn apply_context(self, context: &Context, state: &mut State) -> Self {
+    fn apply_context(self, context: &Context, state: &mut State) -> Self
+    {
         match self {
             Type::Literal { .. } => self,
             Type::Function { from, to } => Type::Function {
@@ -265,7 +291,8 @@ impl Type {
         }
     }
 
-    fn is_well_formed(&self, context: &Context, state: &State) -> bool {
+    fn is_well_formed(&self, context: &Context, state: &State) -> bool
+    {
         match self {
             Type::Literal { .. } => true,
             Type::Function { from, to } => {
@@ -286,7 +313,8 @@ impl Type {
         }
     }
 
-    fn is_monotype(&self, state: &State) -> bool {
+    fn is_monotype(&self, state: &State) -> bool
+    {
         match self {
             Type::Quantification { .. } => false,
             Type::Function { from, to } => {
@@ -296,7 +324,8 @@ impl Type {
         }
     }
 
-    fn existential_occurs(&self, alpha: u64) -> bool {
+    fn existential_occurs(&self, alpha: u64) -> bool
+    {
         match self {
             Type::Literal { .. } => false,
             Type::Existential { id } => &alpha == id,
@@ -306,25 +335,39 @@ impl Type {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum ContextElement {
-    Existential { id: u64 },
-    Solved { id: u64, ty: Index<Type> },
-    TypedVariable { name: &'static str, ty: Index<Type> },
+enum ContextElement
+{
+    Existential
+    {
+        id: u64
+    },
+    Solved
+    {
+        id: u64, ty: Index<Type>
+    },
+    TypedVariable
+    {
+        name: &'static str, ty: Index<Type>
+    },
 }
 
 #[derive(Debug)]
-struct Context {
+struct Context
+{
     elements: Vec<ContextElement>,
 }
 
-impl Context {
-    fn initial() -> Self {
+impl Context
+{
+    fn initial() -> Self
+    {
         Context {
             elements: Vec::new(),
         }
     }
 
-    fn push(&mut self, element: ContextElement) -> &mut Self {
+    fn push(&mut self, element: ContextElement) -> &mut Self
+    {
         self.elements.push(element);
 
         self
@@ -334,7 +377,8 @@ impl Context {
         &mut self,
         element: ContextElement,
         inserts: [ContextElement; N],
-    ) -> &mut Self {
+    ) -> &mut Self
+    {
         match self.elements.iter().position(|elem| elem == &element) {
             Some(index) => {
                 let _count = self.elements.splice(index..=index, inserts).count();
@@ -345,7 +389,8 @@ impl Context {
         self
     }
 
-    fn drain_until(&mut self, element: ContextElement) -> &mut Self {
+    fn drain_until(&mut self, element: ContextElement) -> &mut Self
+    {
         match self.elements.iter().position(|elem| elem == &element) {
             Some(index) => {
                 let _drained = self.elements.drain(index..);
@@ -356,7 +401,8 @@ impl Context {
         self
     }
 
-    fn split_at(&mut self, element: ContextElement) -> (Self, Self) {
+    fn split_at(&mut self, element: ContextElement) -> (Self, Self)
+    {
         match self.elements.iter().position(|elem| elem == &element) {
             Some(index) => {
                 let (lhs, rhs) = self.elements.split_at(index);
@@ -376,13 +422,15 @@ impl Context {
         }
     }
 
-    fn has_existential(&self, alpha: u64) -> bool {
+    fn has_existential(&self, alpha: u64) -> bool
+    {
         self.elements
             .iter()
             .any(|elem| elem == &ContextElement::Existential { id: alpha })
     }
 
-    fn fetch_solved(&self, alpha: u64, state: &State) -> Option<Type> {
+    fn fetch_solved(&self, alpha: u64, state: &State) -> Option<Type>
+    {
         self.elements
             .iter()
             .filter_map(|elem| {
@@ -396,7 +444,8 @@ impl Context {
             .map(|(_, ty)| ty.fetch(state))
     }
 
-    fn fetch_annotation(&self, variable_name: &str, state: &State) -> Option<Type> {
+    fn fetch_annotation(&self, variable_name: &str, state: &State) -> Option<Type>
+    {
         self.elements
             .iter()
             .filter_map(|elem| {
@@ -412,20 +461,24 @@ impl Context {
 }
 
 #[derive(Debug)]
-struct State {
+struct State
+{
     existentials_count: u64,
     types: Vec<Type>,
 }
 
-impl State {
-    fn initial() -> Self {
+impl State
+{
+    fn initial() -> Self
+    {
         State {
             existentials_count: 0,
             types: Vec::new(),
         }
     }
 
-    fn fresh_existential(&mut self) -> u64 {
+    fn fresh_existential(&mut self) -> u64
+    {
         let existential = self.existentials_count;
         self.existentials_count += 1;
 
@@ -433,12 +486,15 @@ impl State {
     }
 }
 
-impl Store<Type> for State {
-    fn fetch(&self, Index { index, .. }: Index<Type>) -> Type {
+impl Store<Type> for State
+{
+    fn fetch(&self, Index { index, .. }: Index<Type>) -> Type
+    {
         self.types[index]
     }
 
-    fn store(&mut self, value: Type) -> Index<Type> {
+    fn store(&mut self, value: Type) -> Index<Type>
+    {
         let index = self.types.len();
         self.types.push(value);
 
@@ -454,7 +510,8 @@ fn subtype<'ctx>(
     context: &'ctx mut Context,
     a: &Type,
     b: &Type,
-) -> &'ctx mut Context {
+) -> &'ctx mut Context
+{
     match (a, b) {
         (Type::Existential { id }, _) => {
             if !b.existential_occurs(*id) {
@@ -479,7 +536,8 @@ fn instantiate_l<'ctx>(
     context: &'ctx mut Context,
     alpha: u64,
     b: &Type,
-) -> &'ctx mut Context {
+) -> &'ctx mut Context
+{
     let (left_context, right_context) = context.split_at(ContextElement::Existential { id: alpha });
 
     if b.is_monotype(state) && b.is_well_formed(&left_context, state) {
@@ -511,7 +569,8 @@ fn instantiate_r<'ctx>(
     context: &'ctx mut Context,
     a: &Type,
     alpha: u64,
-) -> &'ctx mut Context {
+) -> &'ctx mut Context
+{
     let (left_context, right_context) = context.split_at(ContextElement::Existential { id: alpha });
 
     if a.is_monotype(state) && a.is_well_formed(&left_context, state) {
@@ -527,20 +586,23 @@ fn instantiate_r<'ctx>(
     unimplemented!()
 }
 
-fn synthesize(expression: Expression) -> Type {
+fn synthesize(expression: Expression) -> Type
+{
     let mut state = State::initial();
     let mut context = Context::initial();
     let (ty, new_context) = expression.synthesize(&mut state, &mut context);
 
-    ty.apply_context(&new_context, &mut state)
+    ty.apply_context(new_context, &mut state)
 }
 
 #[cfg(test)]
-mod tests {
+mod tests
+{
     use crate::{synthesize, Expression, Literal, LiteralType, Type};
 
     #[test]
-    fn lit_string() {
+    fn lit_string()
+    {
         assert_eq!(
             synthesize(Expression::Literal {
                 literal: Literal::String("Foo"),
@@ -552,7 +614,8 @@ mod tests {
     }
 
     #[test]
-    fn appl_string() {
+    fn appl_string()
+    {
         assert_eq!(
             synthesize(Expression::Application {
                 function: box Expression::Abstraction {
