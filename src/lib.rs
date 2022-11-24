@@ -23,6 +23,7 @@ use std::marker::PhantomData;
 #[derive(Debug)]
 enum Literal
 {
+    Bool(bool),
     String(&'static str),
 }
 
@@ -31,6 +32,7 @@ impl Literal
     fn synthesize(&self) -> LiteralType
     {
         match self {
+            Literal::Bool(_) => LiteralType::Bool,
             Literal::String(_) => LiteralType::String,
         }
     }
@@ -104,13 +106,12 @@ impl Expression
                         ty: Type::Existential { id: alpha }.store(state),
                     });
 
-                (
-                    Type::Function {
-                        from: Type::Existential { id: alpha }.store(state),
-                        to: Type::Existential { id: beta }.store(state),
-                    },
-                    delta,
-                )
+                let ty = Type::Function {
+                    from: Type::Existential { id: alpha }.store(state),
+                    to: Type::Existential { id: beta }.store(state),
+                };
+
+                (ty, delta)
             }
 
             Expression::Application { function, argument } => {
@@ -177,6 +178,7 @@ impl Expression
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum LiteralType
 {
+    Bool,
     String,
 }
 
@@ -628,6 +630,25 @@ mod tests
             }),
             Type::Literal {
                 ty: LiteralType::String
+            }
+        )
+    }
+
+    #[test]
+    fn appl_bool()
+    {
+        assert_eq!(
+            synthesize(Expression::Application {
+                function: box Expression::Abstraction {
+                    parameter: "x",
+                    body: box Expression::Variable { name: "x" }
+                },
+                argument: box Expression::Literal {
+                    literal: Literal::Bool(true)
+                }
+            }),
+            Type::Literal {
+                ty: LiteralType::Bool
             }
         )
     }
