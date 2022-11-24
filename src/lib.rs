@@ -600,7 +600,17 @@ fn synthesize(expression: Expression) -> Type
 #[cfg(test)]
 mod tests
 {
-    use crate::{synthesize, Expression, Literal, LiteralType, Type};
+    use crate::{synthesize, Expression, Index, Literal, LiteralType, Type};
+
+    fn index<T>(value: T) -> Index<T>
+    where
+        T: Copy,
+    {
+        Index {
+            index: 0, // This quite literally doesn't matter
+            phantom: ::std::marker::PhantomData,
+        }
+    }
 
     #[test]
     fn lit_string()
@@ -649,6 +659,21 @@ mod tests
             }),
             Type::Literal {
                 ty: LiteralType::Bool
+            }
+        )
+    }
+
+    #[test]
+    fn lambda()
+    {
+        assert_eq!(
+            synthesize(Expression::Abstraction {
+                parameter: "x",
+                body: box Expression::Variable { name: "x" }
+            }),
+            Type::Function {
+                from: index(Type::Existential { id: 0 }),
+                to: index(Type::Existential { id: 0 })
             }
         )
     }
