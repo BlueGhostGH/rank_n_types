@@ -118,6 +118,19 @@ impl Expression
                 (ty, delta)
             }
 
+            Expression::Tuple { first, second } => {
+                let (a, gamma) = first.synthesize(state, context);
+                let (b, delta) = second.synthesize(state, gamma);
+
+                (
+                    Type::Product {
+                        left: a.store(state),
+                        right: b.store(state),
+                    },
+                    delta,
+                )
+            }
+
             Expression::Application { function, argument } => {
                 let (a, theta) = function.synthesize(state, context);
 
@@ -131,8 +144,6 @@ impl Expression
 
                 return (*ty, delta);
             }
-
-            _ => unimplemented!("{:?}", self),
         }
     }
 
@@ -806,6 +817,29 @@ mod tests
             ),
             Type::Literal {
                 ty: LiteralType::String
+            }
+        )
+    }
+
+    #[test]
+    fn tuples()
+    {
+        assert_eq!(
+            synthesize(Expression::Tuple {
+                first: box Expression::Literal {
+                    literal: Literal::String("foo")
+                },
+                second: box Expression::Literal {
+                    literal: Literal::Bool(true)
+                }
+            }),
+            Type::Product {
+                left: index(Type::Literal {
+                    ty: LiteralType::String
+                }),
+                right: index(Type::Literal {
+                    ty: LiteralType::Bool
+                })
             }
         )
     }
