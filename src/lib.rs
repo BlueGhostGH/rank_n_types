@@ -59,6 +59,10 @@ enum Expression
         parameter: &'static str,
         body: Box<Expression>,
     },
+    Annotation
+    {
+        expr: Box<Expression>, ty: Type
+    },
     Tuple
     {
         first: Box<Expression>,
@@ -117,10 +121,18 @@ impl Expression
             Expression::Application { function, argument } => {
                 let (a, theta) = function.synthesize(state, context);
 
-                argument.application_synthesize(&a.apply_context(theta, state), state, theta)
+                argument.application_synthesize(&a.apply_context(state, theta), state, theta)
             }
 
-            _ => unimplemented!(),
+            Expression::Annotation { expr, ty } => {
+                assert!(ty.is_well_formed(state, context));
+
+                let delta = expr.checks_against(ty, state, context);
+
+                return (*ty, delta);
+            }
+
+            _ => unimplemented!("{:?}", self),
         }
     }
 
@@ -137,7 +149,22 @@ impl Expression
 
                 (to.fetch(state), delta)
             }
-            _ => unreachable!(),
+            Type::Quantification {
+                variable_name,
+                codomain,
+            } => {
+                let alpha = state.fresh_existential();
+                let gamma = context.push(ContextElement::Existential { id: alpha });
+                let substituted_a = substitute(
+                    codomain.fetch(state),
+                    variable_name,
+                    Type::Existential { id: alpha },
+                    state,
+                );
+
+                self.application_synthesize(&substituted_a, state, gamma)
+            }
+            _ => unimplemented!("{:?}", ty),
         }
     }
 
@@ -148,11 +175,18 @@ impl Expression
         context: &'ctx mut Context,
     ) -> &'ctx mut Context
     {
-        assert!(ty.is_well_formed(context, state));
+        assert!(ty.is_well_formed(state, context));
         match (self, &ty) {
             (Expression::Literal { literal }, Type::Literal { ty }) => unimplemented!(),
             (Expression::Abstraction { parameter, body }, Type::Function { from, to }) => {
-                unimplemented!()
+                let typed_variable = ContextElement::TypedVariable {
+                    name: parameter,
+                    ty: *from,
+                };
+                let gamma = context.push(typed_variable);
+
+                body.checks_against(&to.fetch(state), state, gamma)
+                    .drain_until(typed_variable)
             }
             (
                 _,
@@ -160,16 +194,24 @@ impl Expression
                     variable_name,
                     codomain,
                 },
-            ) => unimplemented!(),
+            ) => {
+                let variable = ContextElement::Variable {
+                    name: &variable_name,
+                };
+                let gamma = context.push(variable);
+
+                self.checks_against(&codomain.fetch(state), state, context)
+                    .drain_until(variable)
+            }
             (Expression::Tuple { first, second }, Type::Product { left, right }) => {
                 unimplemented!()
             }
             (_, _) => {
                 let (a, theta) = self.synthesize(state, context);
 
-                let a = a.apply_context(theta, state);
-                let b = ty.apply_context(theta, state);
-                subtype(state, theta, &a, &b)
+                let a = a.apply_context(state, theta);
+                let b = ty.apply_context(state, theta);
+                subtype(&a, &b, state, theta)
             }
         }
     }
@@ -225,6 +267,10 @@ enum Type
     {
         ty: LiteralType
     },
+    Variable
+    {
+        name: &'static str
+    },
     Existential
     {
         id: u64
@@ -258,13 +304,14 @@ impl Type
         }
     }
 
-    fn apply_context(self, context: &Context, state: &mut State) -> Self
+    fn apply_context(self, state: &mut State, context: &Context) -> Self
     {
         match self {
             Type::Literal { .. } => self,
+            Type::Variable { .. } => self,
             Type::Function { from, to } => Type::Function {
-                from: from.fetch(state).apply_context(context, state).store(state),
-                to: to.fetch(state).apply_context(context, state).store(state),
+                from: from.fetch(state).apply_context(state, context).store(state),
+                to: to.fetch(state).apply_context(state, context).store(state),
             },
             Type::Quantification {
                 variable_name,
@@ -273,44 +320,50 @@ impl Type
                 variable_name,
                 codomain: codomain
                     .fetch(state)
-                    .apply_context(context, state)
+                    .apply_context(state, context)
                     .store(state),
             },
             Type::Existential { id } => {
                 if let Some(tau) = context.fetch_solved(id, state) {
-                    tau.apply_context(context, state)
+                    tau.apply_context(state, context)
                 } else {
                     self
                 }
             }
             Type::Product { left, right } => Type::Product {
-                left: left.fetch(state).apply_context(context, state).store(state),
+                left: left.fetch(state).apply_context(state, context).store(state),
                 right: right
                     .fetch(state)
-                    .apply_context(context, state)
+                    .apply_context(state, context)
                     .store(state),
             },
         }
     }
 
-    fn is_well_formed(&self, context: &Context, state: &State) -> bool
+    fn is_well_formed(&self, state: &State, context: &mut Context) -> bool
     {
         match self {
             Type::Literal { .. } => true,
+            Type::Variable { name } => context.has_variable(name),
             Type::Function { from, to } => {
-                from.fetch(state).is_well_formed(context, state)
-                    && to.fetch(state).is_well_formed(context, state)
+                from.fetch(state).is_well_formed(state, context)
+                    && to.fetch(state).is_well_formed(state, context)
             }
             Type::Quantification {
                 variable_name,
                 codomain,
-            } => unimplemented!(),
+            } => codomain.fetch(state).is_well_formed(
+                state,
+                context.push(ContextElement::Variable {
+                    name: variable_name,
+                }),
+            ),
             Type::Existential { id } => {
                 context.has_existential(*id) || context.fetch_solved(*id, state).is_some()
             }
             Type::Product { left, right } => {
-                left.fetch(state).is_well_formed(context, state)
-                    && right.fetch(state).is_well_formed(context, state)
+                left.fetch(state).is_well_formed(state, context)
+                    && right.fetch(state).is_well_formed(state, context)
             }
         }
     }
@@ -339,6 +392,10 @@ impl Type
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum ContextElement
 {
+    Variable
+    {
+        name: &'static str
+    },
     Existential
     {
         id: u64
@@ -431,6 +488,13 @@ impl Context
             .any(|elem| elem == &ContextElement::Existential { id: alpha })
     }
 
+    fn has_variable(&self, alpha: &'static str) -> bool
+    {
+        self.elements
+            .iter()
+            .any(|elem| elem == &ContextElement::Variable { name: alpha })
+    }
+
     fn fetch_solved(&self, alpha: u64, state: &State) -> Option<Type>
     {
         self.elements
@@ -507,42 +571,67 @@ impl Store<Type> for State
     }
 }
 
+fn substitute(a: Type, alpha: &str, b: Type, state: &mut State) -> Type
+{
+    match a {
+        Type::Variable { name } => {
+            if name == alpha {
+                b
+            } else {
+                a
+            }
+        }
+        Type::Function { from, to } => Type::Function {
+            from: substitute(from.fetch(state), alpha, b, state).store(state),
+            to: substitute(to.fetch(state), alpha, b, state).store(state),
+        },
+        _ => unimplemented!("{:?}", a),
+    }
+}
+
 fn subtype<'ctx>(
-    state: &mut State,
-    context: &'ctx mut Context,
     a: &Type,
     b: &Type,
+    state: &mut State,
+    context: &'ctx mut Context,
 ) -> &'ctx mut Context
 {
     match (a, b) {
+        (Type::Variable { name: alpha1 }, Type::Variable { name: alpha2 }) => {
+            assert!(a.is_well_formed(state, context));
+            assert_eq!(alpha1, alpha2);
+
+            context
+        }
         (Type::Existential { id }, _) => {
             if !b.existential_occurs(*id) {
-                instantiate_l(state, context, *id, b)
+                instantiate_l(*id, b, state, context)
             } else {
                 unimplemented!()
             }
         }
         (_, Type::Existential { id }) => {
             if !a.existential_occurs(*id) {
-                instantiate_r(state, context, a, *id)
+                instantiate_r(a, *id, state, context)
             } else {
                 unimplemented!()
             }
         }
-        _ => unimplemented!(),
+        _ => unimplemented!("{:?}", (a, b)),
     }
 }
 
 fn instantiate_l<'ctx>(
-    state: &mut State,
-    context: &'ctx mut Context,
     alpha: u64,
     b: &Type,
+    state: &mut State,
+    context: &'ctx mut Context,
 ) -> &'ctx mut Context
 {
-    let (left_context, right_context) = context.split_at(ContextElement::Existential { id: alpha });
+    let (mut left_context, right_context) =
+        context.split_at(ContextElement::Existential { id: alpha });
 
-    if b.is_monotype(state) && b.is_well_formed(&left_context, state) {
+    if b.is_monotype(state) && b.is_well_formed(state, &mut left_context) {
         return context.insert_in_place(
             ContextElement::Existential { id: alpha },
             [ContextElement::Solved {
@@ -567,15 +656,16 @@ fn instantiate_l<'ctx>(
 }
 
 fn instantiate_r<'ctx>(
-    state: &mut State,
-    context: &'ctx mut Context,
     a: &Type,
     alpha: u64,
+    state: &mut State,
+    context: &'ctx mut Context,
 ) -> &'ctx mut Context
 {
-    let (left_context, right_context) = context.split_at(ContextElement::Existential { id: alpha });
+    let (mut left_context, right_context) =
+        context.split_at(ContextElement::Existential { id: alpha });
 
-    if a.is_monotype(state) && a.is_well_formed(&left_context, state) {
+    if a.is_monotype(state) && a.is_well_formed(state, &mut left_context) {
         return context.insert_in_place(
             ContextElement::Existential { id: alpha },
             [ContextElement::Solved {
@@ -588,26 +678,34 @@ fn instantiate_r<'ctx>(
     unimplemented!()
 }
 
+fn synthesize_with_state(expression: Expression, state: &mut State) -> Type
+{
+    let mut context = Context::initial();
+    let (ty, new_context) = expression.synthesize(state, &mut context);
+
+    ty.apply_context(state, new_context)
+}
+
 fn synthesize(expression: Expression) -> Type
 {
     let mut state = State::initial();
-    let mut context = Context::initial();
-    let (ty, new_context) = expression.synthesize(&mut state, &mut context);
 
-    ty.apply_context(new_context, &mut state)
+    synthesize_with_state(expression, &mut state)
 }
 
 #[cfg(test)]
 mod tests
 {
-    use crate::{synthesize, Expression, Index, Literal, LiteralType, Type};
+    use crate::{
+        synthesize, synthesize_with_state, Expression, Index, Literal, LiteralType, State, Type,
+    };
 
     fn index<T>(value: T) -> Index<T>
     where
         T: Copy,
     {
         Index {
-            index: 0, // This quite literally doesn't matter
+            index: 0, // This is not needed sometimes
             phantom: ::std::marker::PhantomData,
         }
     }
@@ -674,6 +772,40 @@ mod tests
             Type::Function {
                 from: index(Type::Existential { id: 0 }),
                 to: index(Type::Existential { id: 0 })
+            }
+        )
+    }
+
+    #[test]
+    fn id_unit()
+    {
+        let mut state = State::initial();
+
+        assert_eq!(
+            synthesize_with_state(
+                Expression::Application {
+                    function: box Expression::Annotation {
+                        expr: box Expression::Abstraction {
+                            parameter: "x",
+                            body: box Expression::Variable { name: "x" }
+                        },
+                        ty: Type::Quantification {
+                            variable_name: "t",
+                            codomain: Type::Function {
+                                from: Type::Variable { name: "t" }.store(&mut state),
+                                to: Type::Variable { name: "t" }.store(&mut state)
+                            }
+                            .store(&mut state)
+                        }
+                    },
+                    argument: box Expression::Literal {
+                        literal: Literal::String("Foo")
+                    }
+                },
+                &mut state
+            ),
+            Type::Literal {
+                ty: LiteralType::String
             }
         )
     }
