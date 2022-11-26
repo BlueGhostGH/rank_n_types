@@ -142,7 +142,7 @@ impl Expression
 
                 let delta = expr.checks_against(ty, state, context);
 
-                return (*ty, delta);
+                (*ty, delta)
             }
         }
     }
@@ -207,7 +207,7 @@ impl Expression
                 },
             ) => {
                 let variable = ContextElement::Variable {
-                    name: &variable_name,
+                    name: variable_name,
                 };
                 let gamma = context.push(variable);
 
@@ -872,6 +872,41 @@ mod tests
                 }),
                 right: index(Type::Literal {
                     ty: LiteralType::String
+                })
+            }
+        )
+    }
+
+    #[test]
+    fn nested_tuples()
+    {
+        assert_eq!(
+            synthesize(Expression::Application {
+                function: box Expression::Abstraction {
+                    parameter: "x",
+                    body: box Expression::Tuple {
+                        first: box Expression::Variable { name: "x" },
+                        second: box Expression::Tuple {
+                            first: box Expression::Variable { name: "x" },
+                            second: box Expression::Variable { name: "x" }
+                        }
+                    }
+                },
+                argument: box Expression::Literal {
+                    literal: Literal::String("foo")
+                }
+            }),
+            Type::Product {
+                left: index(Type::Literal {
+                    ty: LiteralType::String
+                }),
+                right: index(Type::Product {
+                    left: index(Type::Literal {
+                        ty: LiteralType::String
+                    }),
+                    right: index(Type::Literal {
+                        ty: LiteralType::String
+                    })
                 })
             }
         )
