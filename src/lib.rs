@@ -390,12 +390,18 @@ impl Type
         }
     }
 
-    fn existential_occurs(&self, alpha: u64) -> bool
+    fn existential_occurs(&self, alpha: u64, state: &State) -> bool
     {
         match self {
             Type::Literal { .. } => false,
             Type::Existential { id } => &alpha == id,
-            _ => unimplemented!(),
+            Type::Product { left, right } => {
+                let occurs_in_left = left.fetch(state).existential_occurs(alpha, state);
+                let occurs_in_right = right.fetch(state).existential_occurs(alpha, state);
+
+                occurs_in_left || occurs_in_right
+            }
+            _ => unimplemented!("{:?}", self),
         }
     }
 }
@@ -615,14 +621,14 @@ fn subtype<'ctx>(
             context
         }
         (Type::Existential { id }, _) => {
-            if !b.existential_occurs(*id) {
+            if !b.existential_occurs(*id, state) {
                 instantiate_l(*id, b, state, context)
             } else {
                 unimplemented!()
             }
         }
         (_, Type::Existential { id }) => {
-            if !a.existential_occurs(*id) {
+            if !a.existential_occurs(*id, state) {
                 instantiate_r(a, *id, state, context)
             } else {
                 unimplemented!()
@@ -839,6 +845,33 @@ mod tests
                 }),
                 right: index(Type::Literal {
                     ty: LiteralType::Bool
+                })
+            }
+        )
+    }
+
+    #[test]
+    fn tuples_in_lambda()
+    {
+        assert_eq!(
+            synthesize(Expression::Application {
+                function: box Expression::Abstraction {
+                    parameter: "x",
+                    body: box Expression::Tuple {
+                        first: box Expression::Variable { name: "x" },
+                        second: box Expression::Variable { name: "x" }
+                    }
+                },
+                argument: box Expression::Literal {
+                    literal: Literal::String("foo")
+                }
+            }),
+            Type::Product {
+                left: index(Type::Literal {
+                    ty: LiteralType::String
+                }),
+                right: index(Type::Literal {
+                    ty: LiteralType::String
                 })
             }
         )
