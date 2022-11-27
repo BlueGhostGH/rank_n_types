@@ -911,4 +911,48 @@ mod tests
             }
         )
     }
+
+    #[test]
+    fn tuples_in_fn()
+    {
+        let mut state = State::initial();
+
+        assert_eq!(
+            synthesize_with_state(
+                Expression::Application {
+                    function: box Expression::Annotation {
+                        expr: box Expression::Abstraction {
+                            parameter: "x",
+                            body: box Expression::Variable { name: "x" }
+                        },
+                        ty: Type::Quantification {
+                            variable_name: "t",
+                            codomain: Type::Function {
+                                from: Type::Variable { name: "t" }.store(&mut state),
+                                to: Type::Variable { name: "t" }.store(&mut state)
+                            }
+                            .store(&mut state)
+                        }
+                    },
+                    argument: box Expression::Tuple {
+                        first: box Expression::Literal {
+                            literal: Literal::String("foo")
+                        },
+                        second: box Expression::Literal {
+                            literal: Literal::Bool(true)
+                        }
+                    }
+                },
+                &mut state
+            ),
+            Type::Product {
+                left: index(Type::Literal {
+                    ty: LiteralType::String
+                }),
+                right: index(Type::Literal {
+                    ty: LiteralType::String
+                })
+            }
+        )
+    }
 }
