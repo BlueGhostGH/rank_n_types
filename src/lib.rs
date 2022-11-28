@@ -1032,4 +1032,78 @@ mod tests
             }
         )
     }
+
+    #[test]
+    fn let_fn()
+    {
+        assert_eq!(
+            synthesize(Expression::Application {
+                function: box Expression::Let {
+                    name: "newid",
+                    expr: box Expression::Abstraction {
+                        parameter: "x",
+                        body: box Expression::Variable { name: "x" }
+                    },
+                    body: box Expression::Variable { name: "newid" }
+                },
+                argument: box Expression::Literal {
+                    literal: Literal::String("Foo")
+                }
+            }),
+            Type::Literal {
+                ty: LiteralType::String
+            }
+        )
+    }
+
+    #[test]
+    fn generalised_let()
+    {
+        let mut state = State::initial();
+
+        assert_eq!(
+            synthesize_with_state(
+                Expression::Let {
+                    name: "newid",
+                    expr: box Expression::Annotation {
+                        expr: box Expression::Abstraction {
+                            parameter: "x",
+                            body: box Expression::Variable { name: "x" }
+                        },
+                        ty: Type::Quantification {
+                            variable_name: "t",
+                            codomain: Type::Function {
+                                from: Type::Variable { name: "t" }.store(&mut state),
+                                to: Type::Variable { name: "t" }.store(&mut state)
+                            }
+                            .store(&mut state)
+                        }
+                    },
+                    body: box Expression::Tuple {
+                        first: box Expression::Application {
+                            function: box Expression::Variable { name: "newid" },
+                            argument: box Expression::Literal {
+                                literal: Literal::String("foo")
+                            }
+                        },
+                        second: box Expression::Application {
+                            function: box Expression::Variable { name: "newid" },
+                            argument: box Expression::Literal {
+                                literal: Literal::Bool(true)
+                            }
+                        }
+                    }
+                },
+                &mut state
+            ),
+            Type::Product {
+                left: index(Type::Literal {
+                    ty: LiteralType::String
+                }),
+                right: index(Type::Literal {
+                    ty: LiteralType::Bool
+                })
+            }
+        )
+    }
 }
