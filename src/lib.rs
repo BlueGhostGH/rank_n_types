@@ -38,6 +38,13 @@ impl Literal
     }
 }
 
+/// Literal
+/// Tuple
+/// Let
+/// Variable
+/// Annotation
+/// Abstraction
+/// Application
 #[derive(Debug)]
 enum Expression
 {
@@ -45,28 +52,35 @@ enum Expression
     {
         literal: Literal
     },
+    Tuple
+    {
+        first: Box<Expression>,
+        second: Box<Expression>,
+    },
+    Let
+    {
+        name: &'static str,
+        expr: Box<Expression>,
+        body: Box<Expression>,
+    },
     Variable
     {
         name: &'static str
     },
-    Application
+    Annotation
     {
-        function: Box<Expression>,
-        argument: Box<Expression>,
+        expr: Box<Expression>, ty: Type
     },
     Abstraction
     {
         parameter: &'static str,
         body: Box<Expression>,
     },
-    Annotation
+
+    Application
     {
-        expr: Box<Expression>, ty: Type
-    },
-    Tuple
-    {
-        first: Box<Expression>,
-        second: Box<Expression>,
+        function: Box<Expression>,
+        argument: Box<Expression>,
     },
 }
 
@@ -85,12 +99,49 @@ impl Expression
                 },
                 context,
             ),
+            Expression::Tuple { first, second } => {
+                let (a, gamma) = first.synthesize(state, context);
+                let (b, delta) = second.synthesize(state, gamma);
 
+                (
+                    Type::Product {
+                        left: a.store(state),
+                        right: b.store(state),
+                    },
+                    delta,
+                )
+            }
+            Expression::Let { name, expr, body } => {
+                let (t0, gamma) = expr.synthesize(state, context);
+                let theta = gamma.push(ContextElement::TypedVariable {
+                    name,
+                    ty: t0.store(state),
+                });
+
+                let (t1, delta) = body.synthesize(state, theta);
+
+                (
+                    t1,
+                    delta.insert_in_place(
+                        ContextElement::TypedVariable {
+                            name,
+                            ty: t0.store(state),
+                        },
+                        [],
+                    ),
+                )
+            }
             Expression::Variable { name } => match context.fetch_annotation(name, state) {
                 Some(annotation) => (annotation, context),
                 None => unreachable!(),
             },
+            Expression::Annotation { expr, ty } => {
+                assert!(ty.is_well_formed(state, context));
 
+                let delta = expr.checks_against(ty, state, context);
+
+                (*ty, delta)
+            }
             Expression::Abstraction { parameter, body } => {
                 let alpha = state.fresh_existential();
                 let beta = state.fresh_existential();
@@ -117,32 +168,10 @@ impl Expression
 
                 (ty, delta)
             }
-
-            Expression::Tuple { first, second } => {
-                let (a, gamma) = first.synthesize(state, context);
-                let (b, delta) = second.synthesize(state, gamma);
-
-                (
-                    Type::Product {
-                        left: a.store(state),
-                        right: b.store(state),
-                    },
-                    delta,
-                )
-            }
-
             Expression::Application { function, argument } => {
                 let (a, theta) = function.synthesize(state, context);
 
                 argument.application_synthesize(&a.apply_context(state, theta), state, theta)
-            }
-
-            Expression::Annotation { expr, ty } => {
-                assert!(ty.is_well_formed(state, context));
-
-                let delta = expr.checks_against(ty, state, context);
-
-                (*ty, delta)
             }
         }
     }
@@ -155,11 +184,6 @@ impl Expression
     ) -> (Type, &'ctx mut Context)
     {
         match ty {
-            Type::Function { from, to } => {
-                let delta = self.checks_against(&from.fetch(state), state, context);
-
-                (to.fetch(state), delta)
-            }
             Type::Quantification {
                 variable_name,
                 codomain,
@@ -174,6 +198,11 @@ impl Expression
                 );
 
                 self.application_synthesize(&substituted_a, state, gamma)
+            }
+            Type::Function { from, to } => {
+                let delta = self.checks_against(&from.fetch(state), state, context);
+
+                (to.fetch(state), delta)
             }
             _ => unimplemented!("{:?}", ty),
         }
@@ -199,6 +228,9 @@ impl Expression
                 body.checks_against(&to.fetch(state), state, gamma)
                     .drain_until(typed_variable)
             }
+            (Expression::Tuple { first, second }, Type::Product { left, right }) => {
+                unimplemented!()
+            }
             (
                 _,
                 Type::Quantification {
@@ -213,9 +245,6 @@ impl Expression
 
                 self.checks_against(&codomain.fetch(state), state, context)
                     .drain_until(variable)
-            }
-            (Expression::Tuple { first, second }, Type::Product { left, right }) => {
-                unimplemented!()
             }
             (_, _) => {
                 let (a, theta) = self.synthesize(state, context);
@@ -271,12 +300,23 @@ impl<T> PartialEq for Index<T>
     }
 }
 
+/// Literal
+/// Product
+/// Variable
+/// Existential
+/// Quantification
+/// Function
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum Type
 {
     Literal
     {
         ty: LiteralType
+    },
+    Product
+    {
+        left: Index<Type>,
+        right: Index<Type>,
     },
     Variable
     {
@@ -286,19 +326,14 @@ enum Type
     {
         id: u64
     },
-    Function
-    {
-        from: Index<Type>, to: Index<Type>
-    },
     Quantification
     {
         variable_name: &'static str,
         codomain: Index<Type>,
     },
-    Product
+    Function
     {
-        left: Index<Type>,
-        right: Index<Type>,
+        from: Index<Type>, to: Index<Type>
     },
 }
 
@@ -319,11 +354,21 @@ impl Type
     {
         match self {
             Type::Literal { .. } => self,
-            Type::Variable { .. } => self,
-            Type::Function { from, to } => Type::Function {
-                from: from.fetch(state).apply_context(state, context).store(state),
-                to: to.fetch(state).apply_context(state, context).store(state),
+            Type::Product { left, right } => Type::Product {
+                left: left.fetch(state).apply_context(state, context).store(state),
+                right: right
+                    .fetch(state)
+                    .apply_context(state, context)
+                    .store(state),
             },
+            Type::Variable { .. } => self,
+            Type::Existential { id } => {
+                if let Some(tau) = context.fetch_solved(id, state) {
+                    tau.apply_context(state, context)
+                } else {
+                    self
+                }
+            }
             Type::Quantification {
                 variable_name,
                 codomain,
@@ -334,19 +379,9 @@ impl Type
                     .apply_context(state, context)
                     .store(state),
             },
-            Type::Existential { id } => {
-                if let Some(tau) = context.fetch_solved(id, state) {
-                    tau.apply_context(state, context)
-                } else {
-                    self
-                }
-            }
-            Type::Product { left, right } => Type::Product {
-                left: left.fetch(state).apply_context(state, context).store(state),
-                right: right
-                    .fetch(state)
-                    .apply_context(state, context)
-                    .store(state),
+            Type::Function { from, to } => Type::Function {
+                from: from.fetch(state).apply_context(state, context).store(state),
+                to: to.fetch(state).apply_context(state, context).store(state),
             },
         }
     }
@@ -355,10 +390,13 @@ impl Type
     {
         match self {
             Type::Literal { .. } => true,
+            Type::Product { left, right } => {
+                left.fetch(state).is_well_formed(state, context)
+                    && right.fetch(state).is_well_formed(state, context)
+            }
             Type::Variable { name } => context.has_variable(name),
-            Type::Function { from, to } => {
-                from.fetch(state).is_well_formed(state, context)
-                    && to.fetch(state).is_well_formed(state, context)
+            Type::Existential { id } => {
+                context.has_existential(*id) || context.fetch_solved(*id, state).is_some()
             }
             Type::Quantification {
                 variable_name,
@@ -369,12 +407,9 @@ impl Type
                     name: variable_name,
                 }),
             ),
-            Type::Existential { id } => {
-                context.has_existential(*id) || context.fetch_solved(*id, state).is_some()
-            }
-            Type::Product { left, right } => {
-                left.fetch(state).is_well_formed(state, context)
-                    && right.fetch(state).is_well_formed(state, context)
+            Type::Function { from, to } => {
+                from.fetch(state).is_well_formed(state, context)
+                    && to.fetch(state).is_well_formed(state, context)
             }
         }
     }
@@ -394,24 +429,32 @@ impl Type
     {
         match self {
             Type::Literal { .. } => false,
-            Type::Existential { id } => &alpha == id,
             Type::Product { left, right } => {
                 let occurs_in_left = left.fetch(state).existential_occurs(alpha, state);
                 let occurs_in_right = right.fetch(state).existential_occurs(alpha, state);
 
                 occurs_in_left || occurs_in_right
             }
+            Type::Existential { id } => &alpha == id,
             _ => unimplemented!("{:?}", self),
         }
     }
 }
 
+/// Variable
+/// TypedVariable
+/// Existential
+/// Solved
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum ContextElement
 {
     Variable
     {
         name: &'static str
+    },
+    TypedVariable
+    {
+        name: &'static str, ty: Index<Type>
     },
     Existential
     {
@@ -420,10 +463,6 @@ enum ContextElement
     Solved
     {
         id: u64, ty: Index<Type>
-    },
-    TypedVariable
-    {
-        name: &'static str, ty: Index<Type>
     },
 }
 
@@ -952,6 +991,44 @@ mod tests
                 right: index(Type::Literal {
                     ty: LiteralType::String
                 })
+            }
+        )
+    }
+
+    #[test]
+    fn let_binding()
+    {
+        let mut state = State::initial();
+
+        assert_eq!(
+            synthesize_with_state(
+                Expression::Let {
+                    name: "a",
+                    expr: box Expression::Literal {
+                        literal: Literal::Bool(true)
+                    },
+                    body: box Expression::Application {
+                        function: box Expression::Annotation {
+                            expr: box Expression::Abstraction {
+                                parameter: "x",
+                                body: box Expression::Variable { name: "x" }
+                            },
+                            ty: Type::Quantification {
+                                variable_name: "t",
+                                codomain: Type::Function {
+                                    from: Type::Variable { name: "t" }.store(&mut state),
+                                    to: Type::Variable { name: "t" }.store(&mut state)
+                                }
+                                .store(&mut state)
+                            }
+                        },
+                        argument: box Expression::Variable { name: "a" }
+                    }
+                },
+                &mut state
+            ),
+            Type::Literal {
+                ty: LiteralType::Bool
             }
         )
     }
