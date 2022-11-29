@@ -49,49 +49,71 @@ impl Context
         &mut self,
         element: Element,
         inserts: [Element; N],
-    ) -> &mut Self
+        state: &state::State,
+    ) -> ::std::result::Result<&mut Self, self::Error>
     {
-        match self.elements.iter().position(|elem| elem == &element) {
-            Some(index) => {
-                let _count = self.elements.splice(index..=index, inserts).count();
-            }
-            None => unreachable!("{:?}", (&self.elements, element)),
-        };
+        let index = self
+            .elements
+            .iter()
+            .position(|elem| elem == &element)
+            .ok_or(Error::ElementNotFound {
+                state: state.clone(),
+                element,
+            })?;
 
-        self
+        let _count = self.elements.splice(index..=index, inserts).count();
+
+        Ok(self)
     }
 
-    pub(crate) fn drain_until(&mut self, element: Element) -> &mut Self
+    pub(crate) fn drain_until(
+        &mut self,
+        element: Element,
+        state: &state::State,
+    ) -> ::std::result::Result<&mut Self, self::Error>
     {
-        match self.elements.iter().position(|elem| elem == &element) {
-            Some(index) => {
-                let _drained = self.elements.drain(index..);
-            }
-            None => unreachable!(),
-        };
+        let index = self
+            .elements
+            .iter()
+            .position(|elem| elem == &element)
+            .ok_or(Error::ElementNotFound {
+                state: state.clone(),
+                element,
+            })?;
 
-        self
+        let _drained = self.elements.drain(index..);
+        ::std::mem::drop(_drained);
+
+        Ok(self)
     }
 
-    pub(crate) fn split_at(&mut self, element: Element) -> (Self, Self)
+    pub(crate) fn split_at(
+        &mut self,
+        element: Element,
+        state: &state::State,
+    ) -> ::std::result::Result<(Self, Self), self::Error>
     {
-        match self.elements.iter().position(|elem| elem == &element) {
-            Some(index) => {
-                let (lhs, rhs) = self.elements.split_at(index);
+        let index = self
+            .elements
+            .iter()
+            .position(|elem| elem == &element)
+            .ok_or(Error::ElementNotFound {
+                state: state.clone(),
+                element,
+            })?;
 
-                let left_context = {
-                    let elements = lhs.to_vec();
-                    Context { elements }
-                };
-                let right_context = {
-                    let elements = rhs.to_vec();
-                    Context { elements }
-                };
+        let (lhs, rhs) = self.elements.split_at(index);
 
-                (left_context, right_context)
-            }
-            None => unreachable!(),
-        }
+        let left_context = {
+            let elements = lhs.to_vec();
+            Context { elements }
+        };
+        let right_context = {
+            let elements = rhs.to_vec();
+            Context { elements }
+        };
+
+        Ok((left_context, right_context))
     }
 
     pub(crate) fn has_variable(&self, alpha: &'static str) -> bool
@@ -140,5 +162,50 @@ impl Context
             })
             .find(|(id, _)| id == &&alpha)
             .map(|(_, ty)| ty.fetch(state))
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum Error
+{
+    ElementNotFound
+    {
+        state: state::State,
+        element: Element,
+    },
+}
+
+impl ::std::fmt::Display for Error
+{
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result
+    {
+        match self {
+            Error::ElementNotFound { state, element } => {
+                let element = match element {
+                    Element::Variable { name } => format!("variable {name}"),
+                    Element::TypedVariable { name, ty } => {
+                        let kind = ty::Kind::from(ty.fetch(state));
+
+                        format!("variable {name} of type {kind}")
+                    }
+                    Element::Existential { id } => format!("existential t{id}"),
+                    Element::Solved { id, ty } => {
+                        let kind = ty::Kind::from(ty.fetch(state));
+
+                        format!("existential t{id} solved with type {kind}")
+                    }
+                };
+
+                f.write_fmt(format_args!("could not find the {element} in context"))
+            }
+        }
+    }
+}
+
+impl ::std::error::Error for Error
+{
+    fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)>
+    {
+        None
     }
 }

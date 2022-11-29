@@ -147,3 +147,44 @@ impl Type
         }
     }
 }
+
+#[derive(Debug)]
+pub(crate) enum Kind
+{
+    Literal,
+    Product,
+    Variable,
+    Existential,
+    Quantification,
+    Function,
+}
+
+impl From<Type> for Kind
+{
+    fn from(ty: Type) -> Self
+    {
+        match ty {
+            Type::Literal { .. } => Kind::Literal,
+            Type::Product { .. } => Kind::Product,
+            Type::Variable { .. } => Kind::Variable,
+            Type::Existential { .. } => Kind::Existential,
+            Type::Quantification { .. } => Kind::Quantification,
+            Type::Function { .. } => Kind::Function,
+        }
+    }
+}
+
+impl ::std::fmt::Display for Kind
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+    {
+        match self {
+            Kind::Literal => f.write_str("literal"),
+            Kind::Product => f.write_str("product"),
+            Kind::Variable => f.write_str("variable"),
+            Kind::Existential => f.write_str("existential"),
+            Kind::Quantification => f.write_str("quantification"),
+            Kind::Function => f.write_str("function"),
+        }
+    }
+}

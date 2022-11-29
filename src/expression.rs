@@ -63,57 +63,56 @@ impl Expression
         &self,
         state: &mut state::State,
         context: &'ctx mut context::Context,
-    ) -> (ty::Type, &'ctx mut context::Context)
+    ) -> ::std::result::Result<(ty::Type, &'ctx mut context::Context), context::Error>
     {
         match self {
-            Expression::Literal { literal } => (
+            Expression::Literal { literal } => Ok((
                 ty::Type::Literal {
                     ty: literal.synthesize(),
                 },
                 context,
-            ),
+            )),
             Expression::Tuple { first, second } => {
-                let (a, gamma) = first.synthesize(state, context);
-                let (b, delta) = second.synthesize(state, gamma);
+                let (a, gamma) = first.synthesize(state, context)?;
+                let (b, delta) = second.synthesize(state, gamma)?;
 
-                (
+                Ok((
                     ty::Type::Product {
                         left: a.store(state),
                         right: b.store(state),
                     },
                     delta,
-                )
+                ))
             }
             Expression::Let { name, expr, body } => {
-                let (t0, gamma) = expr.synthesize(state, context);
+                let (t0, gamma) = expr.synthesize(state, context)?;
                 let theta = gamma.push(context::Element::TypedVariable {
                     name,
                     ty: t0.store(state),
                 });
 
-                let (t1, delta) = body.synthesize(state, theta);
+                let (t1, delta) = body.synthesize(state, theta)?;
+                let omega = delta.insert_in_place(
+                    context::Element::TypedVariable {
+                        name,
+                        ty: t0.store(state),
+                    },
+                    [],
+                    state,
+                )?;
 
-                (
-                    t1,
-                    delta.insert_in_place(
-                        context::Element::TypedVariable {
-                            name,
-                            ty: t0.store(state),
-                        },
-                        [],
-                    ),
-                )
+                Ok((t1, omega))
             }
             Expression::Variable { name } => match context.fetch_annotation(name, state) {
-                Some(annotation) => (annotation, context),
+                Some(annotation) => Ok((annotation, context)),
                 None => unreachable!(),
             },
             Expression::Annotation { expr, ty } => {
                 assert!(ty.is_well_formed(state, context));
 
-                let delta = expr.checks_against(ty, state, context);
+                let delta = expr.checks_against(ty, state, context)?;
 
-                (*ty, delta)
+                Ok((*ty, delta))
             }
             Expression::Abstraction { parameter, body } => {
                 let alpha = state.fresh_existential();
@@ -128,21 +127,24 @@ impl Expression
                     });
 
                 let delta = body
-                    .checks_against(&ty::Type::Existential { id: beta }, state, gamma)
-                    .drain_until(context::Element::TypedVariable {
-                        name: parameter,
-                        ty: ty::Type::Existential { id: alpha }.store(state),
-                    });
+                    .checks_against(&ty::Type::Existential { id: beta }, state, gamma)?
+                    .drain_until(
+                        context::Element::TypedVariable {
+                            name: parameter,
+                            ty: ty::Type::Existential { id: alpha }.store(state),
+                        },
+                        state,
+                    )?;
 
                 let ty = ty::Type::Function {
                     from: ty::Type::Existential { id: alpha }.store(state),
                     to: ty::Type::Existential { id: beta }.store(state),
                 };
 
-                (ty, delta)
+                Ok((ty, delta))
             }
             Expression::Application { function, argument } => {
-                let (a, theta) = function.synthesize(state, context);
+                let (a, theta) = function.synthesize(state, context)?;
 
                 argument.application_synthesize(&a.apply_context(state, theta), state, theta)
             }
@@ -154,7 +156,7 @@ impl Expression
         ty: &ty::Type,
         state: &mut state::State,
         context: &'ctx mut context::Context,
-    ) -> (ty::Type, &'ctx mut context::Context)
+    ) -> ::std::result::Result<(ty::Type, &'ctx mut context::Context), context::Error>
     {
         match ty {
             ty::Type::Quantification { variable, codomain } => {
@@ -170,9 +172,9 @@ impl Expression
                 self.application_synthesize(&substituted_a, state, gamma)
             }
             ty::Type::Function { from, to } => {
-                let delta = self.checks_against(&from.fetch(state), state, context);
+                let delta = self.checks_against(&from.fetch(state), state, context)?;
 
-                (to.fetch(state), delta)
+                Ok((to.fetch(state), delta))
             }
             _ => unimplemented!("{:?}", ty),
         }
@@ -183,7 +185,7 @@ impl Expression
         ty: &ty::Type,
         state: &mut state::State,
         context: &'ctx mut context::Context,
-    ) -> &'ctx mut context::Context
+    ) -> ::std::result::Result<&'ctx mut context::Context, context::Error>
     {
         assert!(ty.is_well_formed(state, context));
         match (self, &ty) {
@@ -195,8 +197,9 @@ impl Expression
                 };
                 let gamma = context.push(typed_variable);
 
-                body.checks_against(&to.fetch(state), state, gamma)
-                    .drain_until(typed_variable)
+                Ok(body
+                    .checks_against(&to.fetch(state), state, gamma)?
+                    .drain_until(typed_variable, state)?)
             }
             (Expression::Tuple { first, second }, ty::Type::Product { left, right }) => {
                 unimplemented!()
@@ -205,11 +208,12 @@ impl Expression
                 let variable = context::Element::Variable { name: variable };
                 let gamma = context.push(variable);
 
-                self.checks_against(&codomain.fetch(state), state, context)
-                    .drain_until(variable)
+                Ok(self
+                    .checks_against(&codomain.fetch(state), state, context)?
+                    .drain_until(variable, state)?)
             }
             (_, _) => {
-                let (a, theta) = self.synthesize(state, context);
+                let (a, theta) = self.synthesize(state, context)?;
 
                 let a = a.apply_context(state, theta);
                 let b = ty.apply_context(state, theta);

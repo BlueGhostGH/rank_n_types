@@ -47,14 +47,14 @@ fn subtype<'ctx>(
     b: &ty::Type,
     state: &mut state::State,
     context: &'ctx mut context::Context,
-) -> &'ctx mut context::Context
+) -> ::std::result::Result<&'ctx mut context::Context, context::Error>
 {
     match (a, b) {
         (ty::Type::Variable { name: alpha1 }, ty::Type::Variable { name: alpha2 }) => {
             assert!(a.is_well_formed(state, context));
             assert_eq!(alpha1, alpha2);
 
-            context
+            Ok(context)
         }
         (ty::Type::Existential { id }, _) => {
             if !b.existential_occurs(*id, state) {
@@ -79,10 +79,10 @@ fn instantiate_l<'ctx>(
     b: &ty::Type,
     state: &mut state::State,
     context: &'ctx mut context::Context,
-) -> &'ctx mut context::Context
+) -> ::std::result::Result<&'ctx mut context::Context, context::Error>
 {
     let (mut left_context, right_context) =
-        context.split_at(context::Element::Existential { id: alpha });
+        context.split_at(context::Element::Existential { id: alpha }, state)?;
 
     if b.is_monotype(state) && b.is_well_formed(state, &mut left_context) {
         return context.insert_in_place(
@@ -91,6 +91,7 @@ fn instantiate_l<'ctx>(
                 id: alpha,
                 ty: b.store(state),
             }],
+            state,
         );
     }
 
@@ -102,6 +103,7 @@ fn instantiate_l<'ctx>(
                     id,
                     ty: ty::Type::Existential { id: alpha }.store(state),
                 }],
+                state,
             );
         }
         _ => unimplemented!(),
@@ -113,10 +115,10 @@ fn instantiate_r<'ctx>(
     alpha: u64,
     state: &mut state::State,
     context: &'ctx mut context::Context,
-) -> &'ctx mut context::Context
+) -> ::std::result::Result<&'ctx mut context::Context, context::Error>
 {
     let (mut left_context, right_context) =
-        context.split_at(context::Element::Existential { id: alpha });
+        context.split_at(context::Element::Existential { id: alpha }, state)?;
 
     if a.is_monotype(state) && a.is_well_formed(state, &mut left_context) {
         return context.insert_in_place(
@@ -125,6 +127,7 @@ fn instantiate_r<'ctx>(
                 id: alpha,
                 ty: a.store(state),
             }],
+            state,
         );
     }
 
@@ -134,7 +137,9 @@ fn instantiate_r<'ctx>(
 fn synthesize_with_state(expression: expression::Expression, state: &mut state::State) -> ty::Type
 {
     let mut context = context::Context::initial();
-    let (ty, new_context) = expression.synthesize(state, &mut context);
+    // NOTE: This unwrap is temporary until proper error
+    // handling has been implemented for the whole crate
+    let (ty, new_context) = expression.synthesize(state, &mut context).unwrap();
 
     ty.apply_context(state, new_context)
 }
