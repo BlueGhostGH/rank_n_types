@@ -3,7 +3,11 @@ use crate::{context, intern, state};
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(crate) enum Literal
 {
+    Unit,
     Bool,
+    Int,
+    Float,
+    Char,
     String,
 }
 

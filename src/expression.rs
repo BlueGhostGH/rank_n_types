@@ -3,7 +3,11 @@ use crate::{context, state, ty};
 #[derive(Debug)]
 pub(crate) enum Literal
 {
+    Unit,
     Bool(bool),
+    Int(u64),
+    Float(f64),
+    Char(char),
     String(&'static str),
 }
 
@@ -12,7 +16,11 @@ impl Literal
     fn synthesize(&self) -> ty::Literal
     {
         match self {
+            Literal::Unit => ty::Literal::Unit,
             Literal::Bool(_) => ty::Literal::Bool,
+            Literal::Int(_) => ty::Literal::Int,
+            Literal::Float(_) => ty::Literal::Float,
+            Literal::Char(_) => ty::Literal::Char,
             Literal::String(_) => ty::Literal::String,
         }
     }
