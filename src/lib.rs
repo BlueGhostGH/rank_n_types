@@ -57,14 +57,14 @@ fn subtype<'ctx>(
             Ok(context)
         }
         (ty::Type::Existential { id }, _) => {
-            if !b.existential_occurs(*id, state) {
+            if !b.has_existential(*id, state) {
                 instantiate_l(*id, b, state, context)
             } else {
                 unimplemented!()
             }
         }
         (_, ty::Type::Existential { id }) => {
-            if !a.existential_occurs(*id, state) {
+            if !a.has_existential(*id, state) {
                 instantiate_r(a, *id, state, context)
             } else {
                 unimplemented!()

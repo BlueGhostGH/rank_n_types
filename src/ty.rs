@@ -136,18 +136,43 @@ impl Type
         }
     }
 
-    pub(crate) fn existential_occurs(&self, alpha: u64, state: &state::State) -> bool
+    pub(crate) fn has_existential(&self, alpha: u64, state: &state::State) -> bool
     {
         match self {
             Type::Literal { .. } => false,
             Type::Product { left, right } => {
-                let occurs_in_left = left.fetch(state).existential_occurs(alpha, state);
-                let occurs_in_right = right.fetch(state).existential_occurs(alpha, state);
+                let occurs_in_left = left.fetch(state).has_existential(alpha, state);
+                let occurs_in_right = right.fetch(state).has_existential(alpha, state);
 
                 occurs_in_left || occurs_in_right
             }
+            Type::Variable { name } => {
+                // An existential name is of the shape t{n},
+                // where {n} is a whole, but existentials  are u64's,
+                // therefore the first char must be discarded
+                let n = &name[1..];
+
+                match n.parse() {
+                    Ok(beta) => alpha == beta,
+                    Err(_) => false,
+                }
+            }
             Type::Existential { id } => &alpha == id,
-            _ => unimplemented!("{:?}", self),
+            Type::Quantification { variable, codomain } => {
+                // Same logic as for `Variable`
+                let n = &variable[1..];
+
+                match n.parse() {
+                    Ok(beta) => alpha == beta,
+                    Err(_) => codomain.fetch(state).has_existential(alpha, state),
+                }
+            }
+            Type::Function { from, to } => {
+                let occurs_in_from = from.fetch(state).has_existential(alpha, state);
+                let occurs_in_to = to.fetch(state).has_existential(alpha, state);
+
+                occurs_in_from || occurs_in_to
+            }
         }
     }
 }
