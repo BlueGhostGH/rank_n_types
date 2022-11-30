@@ -92,10 +92,10 @@ impl Type
             Type::Quantification { variable, codomain } => {
                 let alpha = state.fresh_existential();
                 let gamma = context.push(context::Element::Existential { id: alpha });
-                let substituted_a = crate::substitute(
-                    codomain.fetch(state),
+                let substituted_a = substitute(
+                    &codomain.fetch(state),
                     variable,
-                    Type::Existential { id: alpha },
+                    &Type::Existential { id: alpha },
                     state,
                 );
 
@@ -231,6 +231,116 @@ impl Type
             }
         }
     }
+}
+
+pub(crate) fn substitute(a: &Type, alpha: &str, b: &Type, state: &mut state::State) -> Type
+{
+    match a {
+        Type::Variable { name } => {
+            if name == &alpha {
+                *b
+            } else {
+                *a
+            }
+        }
+        Type::Function { from, to } => Type::Function {
+            from: substitute(&from.fetch(state), alpha, b, state).store(state),
+            to: substitute(&to.fetch(state), alpha, b, state).store(state),
+        },
+        _ => unimplemented!("{:?}", a),
+    }
+}
+
+pub(crate) fn subtype<'ctx>(
+    a: &Type,
+    b: &Type,
+    state: &mut state::State,
+    context: &'ctx mut context::Context,
+) -> ::std::result::Result<&'ctx mut context::Context, crate::error::Error>
+{
+    match (a, b) {
+        (Type::Variable { name: alpha }, Type::Variable { name: beta }) => {
+            assert!(a.is_well_formed(state, context));
+            assert_eq!(alpha, beta);
+
+            Ok(context)
+        }
+        (Type::Existential { id }, _) => {
+            if !b.has_existential(*id, state) {
+                instantiate_l(*id, b, state, context)
+            } else {
+                unimplemented!()
+            }
+        }
+        (_, Type::Existential { id }) => {
+            if !a.has_existential(*id, state) {
+                instantiate_r(a, *id, state, context)
+            } else {
+                unimplemented!()
+            }
+        }
+        _ => unimplemented!("{:?}", (a, b)),
+    }
+}
+
+fn instantiate_l<'ctx>(
+    alpha: u64,
+    b: &Type,
+    state: &mut state::State,
+    context: &'ctx mut context::Context,
+) -> ::std::result::Result<&'ctx mut context::Context, crate::error::Error>
+{
+    let (mut left_context, right_context) =
+        context.split_at(context::Element::Existential { id: alpha }, state)?;
+
+    if b.is_monotype(state) && b.is_well_formed(state, &mut left_context) {
+        return context.insert_in_place(
+            context::Element::Existential { id: alpha },
+            [context::Element::Solved {
+                id: alpha,
+                ty: b.store(state),
+            }],
+            state,
+        );
+    }
+
+    match b {
+        &Type::Existential { id } => {
+            return context.insert_in_place(
+                context::Element::Existential { id },
+                [context::Element::Solved {
+                    id,
+                    ty: Type::Existential { id: alpha }.store(state),
+                }],
+                state,
+            );
+        }
+        _ => unimplemented!(),
+    }
+}
+
+fn instantiate_r<'ctx>(
+    a: &Type,
+    alpha: u64,
+    state: &mut state::State,
+    context: &'ctx mut context::Context,
+) -> ::std::result::Result<&'ctx mut context::Context, crate::error::Error>
+{
+    let (mut left_context, right_context) =
+        context.split_at(context::Element::Existential { id: alpha }, state)?;
+
+    if a.is_monotype(state) && a.is_well_formed(state, &mut left_context) {
+        return context.insert_in_place(
+            context::Element::Existential { id: alpha },
+            [context::Element::Solved {
+                id: alpha,
+                ty: a.store(state),
+            }],
+            state,
+        );
+    }
+
+    unimplemented!()
 }
 
 #[derive(Debug)]

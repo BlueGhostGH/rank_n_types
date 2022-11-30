@@ -208,7 +208,7 @@ impl Expression
                 let a = a.apply_context(state, theta);
                 let b = ty.apply_context(state, theta);
 
-                Ok(crate::subtype(&a, &b, state, theta)?)
+                Ok(ty::subtype(&a, &b, state, theta)?)
             }
         }
     }
