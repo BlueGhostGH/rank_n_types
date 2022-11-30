@@ -158,66 +158,13 @@ impl Expression
             Expression::Application { function, argument } => {
                 let (a, theta) = function.synthesize(state, context)?;
 
-                argument.application_synthesize(&a.apply_context(state, theta), state, theta)
+                a.apply_context(state, theta)
+                    .synthesize_application(argument, state, theta)
             }
         }
     }
 
-    fn application_synthesize<'ctx>(
-        &self,
-        ty: &ty::Type,
-        state: &mut state::State,
-        context: &'ctx mut context::Context,
-    ) -> ::std::result::Result<(ty::Type, &'ctx mut context::Context), self::Error>
-    {
-        match ty {
-            &ty::Type::Existential { id } => {
-                let alpha = state.fresh_existential();
-                let beta = state.fresh_existential();
-
-                let gamma = context.insert_in_place(
-                    context::Element::Existential { id },
-                    [
-                        context::Element::Existential { id: beta },
-                        context::Element::Existential { id: alpha },
-                        context::Element::Solved {
-                            id,
-                            ty: ty::Type::Function {
-                                from: ty::Type::Existential { id: alpha }.store(state),
-                                to: ty::Type::Existential { id: beta }.store(state),
-                            }
-                            .store(state),
-                        },
-                    ],
-                    state,
-                );
-                let delta =
-                    self.checks_against(&ty::Type::Existential { id: alpha }, state, context)?;
-
-                Ok((ty::Type::Existential { id: beta }, delta))
-            }
-            ty::Type::Quantification { variable, codomain } => {
-                let alpha = state.fresh_existential();
-                let gamma = context.push(context::Element::Existential { id: alpha });
-                let substituted_a = crate::substitute(
-                    codomain.fetch(state),
-                    variable,
-                    ty::Type::Existential { id: alpha },
-                    state,
-                );
-
-                self.application_synthesize(&substituted_a, state, gamma)
-            }
-            ty::Type::Function { from, to } => {
-                let delta = self.checks_against(&from.fetch(state), state, context)?;
-
-                Ok((to.fetch(state), delta))
-            }
-            _ => todo!("Handle applying wrong type"),
-        }
-    }
-
-    fn checks_against<'ctx>(
+    pub(crate) fn checks_against<'ctx>(
         &self,
         ty: &ty::Type,
         state: &mut state::State,

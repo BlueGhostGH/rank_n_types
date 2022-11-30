@@ -1,4 +1,4 @@
-use crate::{context, intern, state};
+use crate::{context, expression, intern, state};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(crate) enum Literal
@@ -53,6 +53,60 @@ impl Type
         intern::Intern {
             index,
             phantom: ::std::marker::PhantomData,
+        }
+    }
+
+    pub(crate) fn synthesize_application<'ctx>(
+        &self,
+        expr: &expression::Expression,
+        state: &mut state::State,
+        context: &'ctx mut context::Context,
+    ) -> ::std::result::Result<(Type, &'ctx mut context::Context), expression::Error>
+    {
+        match self {
+            &Type::Existential { id } => {
+                let alpha = state.fresh_existential();
+                let beta = state.fresh_existential();
+
+                let gamma = context.insert_in_place(
+                    context::Element::Existential { id },
+                    [
+                        context::Element::Existential { id: beta },
+                        context::Element::Existential { id: alpha },
+                        context::Element::Solved {
+                            id,
+                            ty: Type::Function {
+                                from: Type::Existential { id: alpha }.store(state),
+                                to: Type::Existential { id: beta }.store(state),
+                            }
+                            .store(state),
+                        },
+                    ],
+                    state,
+                );
+                let delta =
+                    expr.checks_against(&Type::Existential { id: alpha }, state, context)?;
+
+                Ok((Type::Existential { id: beta }, delta))
+            }
+            Type::Quantification { variable, codomain } => {
+                let alpha = state.fresh_existential();
+                let gamma = context.push(context::Element::Existential { id: alpha });
+                let substituted_a = crate::substitute(
+                    codomain.fetch(state),
+                    variable,
+                    Type::Existential { id: alpha },
+                    state,
+                );
+
+                substituted_a.synthesize_application(expr, state, gamma)
+            }
+            Type::Function { from, to } => {
+                let delta = expr.checks_against(&from.fetch(state), state, context)?;
+
+                Ok((to.fetch(state), delta))
+            }
+            _ => todo!("Handle applying wrong type"),
         }
     }
 
