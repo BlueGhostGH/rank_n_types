@@ -50,9 +50,9 @@ fn subtype<'ctx>(
 ) -> ::std::result::Result<&'ctx mut context::Context, context::Error>
 {
     match (a, b) {
-        (ty::Type::Variable { name: alpha1 }, ty::Type::Variable { name: alpha2 }) => {
+        (ty::Type::Variable { name: alpha }, ty::Type::Variable { name: beta }) => {
             assert!(a.is_well_formed(state, context));
-            assert_eq!(alpha1, alpha2);
+            assert_eq!(alpha, beta);
 
             Ok(context)
         }

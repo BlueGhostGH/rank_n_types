@@ -166,6 +166,31 @@ impl Expression
     ) -> ::std::result::Result<(ty::Type, &'ctx mut context::Context), self::Error>
     {
         match ty {
+            &ty::Type::Existential { id } => {
+                let alpha = state.fresh_existential();
+                let beta = state.fresh_existential();
+
+                let gamma = context.insert_in_place(
+                    context::Element::Existential { id },
+                    [
+                        context::Element::Existential { id: beta },
+                        context::Element::Existential { id: alpha },
+                        context::Element::Solved {
+                            id,
+                            ty: ty::Type::Function {
+                                from: ty::Type::Existential { id: alpha }.store(state),
+                                to: ty::Type::Existential { id: beta }.store(state),
+                            }
+                            .store(state),
+                        },
+                    ],
+                    state,
+                );
+                let delta =
+                    self.checks_against(&ty::Type::Existential { id: alpha }, state, context)?;
+
+                Ok((ty::Type::Existential { id: beta }, delta))
+            }
             ty::Type::Quantification { variable, codomain } => {
                 let alpha = state.fresh_existential();
                 let gamma = context.push(context::Element::Existential { id: alpha });
