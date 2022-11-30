@@ -24,6 +24,8 @@ mod intern;
 mod state;
 mod ty;
 
+mod error;
+
 fn substitute(a: ty::Type, alpha: &str, b: ty::Type, state: &mut state::State) -> ty::Type
 {
     match a {
@@ -47,7 +49,7 @@ fn subtype<'ctx>(
     b: &ty::Type,
     state: &mut state::State,
     context: &'ctx mut context::Context,
-) -> ::std::result::Result<&'ctx mut context::Context, context::Error>
+) -> ::std::result::Result<&'ctx mut context::Context, error::Error>
 {
     match (a, b) {
         (ty::Type::Variable { name: alpha }, ty::Type::Variable { name: beta }) => {
@@ -79,7 +81,7 @@ fn instantiate_l<'ctx>(
     b: &ty::Type,
     state: &mut state::State,
     context: &'ctx mut context::Context,
-) -> ::std::result::Result<&'ctx mut context::Context, context::Error>
+) -> ::std::result::Result<&'ctx mut context::Context, error::Error>
 {
     let (mut left_context, right_context) =
         context.split_at(context::Element::Existential { id: alpha }, state)?;
@@ -115,7 +117,7 @@ fn instantiate_r<'ctx>(
     alpha: u64,
     state: &mut state::State,
     context: &'ctx mut context::Context,
-) -> ::std::result::Result<&'ctx mut context::Context, context::Error>
+) -> ::std::result::Result<&'ctx mut context::Context, error::Error>
 {
     let (mut left_context, right_context) =
         context.split_at(context::Element::Existential { id: alpha }, state)?;

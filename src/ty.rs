@@ -61,7 +61,7 @@ impl Type
         expr: &expression::Expression,
         state: &mut state::State,
         context: &'ctx mut context::Context,
-    ) -> ::std::result::Result<(Type, &'ctx mut context::Context), expression::Error>
+    ) -> ::std::result::Result<(Type, &'ctx mut context::Context), crate::error::Error>
     {
         match self {
             &Type::Existential { id } => {

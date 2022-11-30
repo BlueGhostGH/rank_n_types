@@ -50,7 +50,7 @@ impl Context
         element: Element,
         inserts: [Element; N],
         state: &state::State,
-    ) -> ::std::result::Result<&mut Self, self::Error>
+    ) -> ::std::result::Result<&mut Self, crate::error::Error>
     {
         let index = self
             .elements
@@ -70,7 +70,7 @@ impl Context
         &mut self,
         element: Element,
         state: &state::State,
-    ) -> ::std::result::Result<&mut Self, self::Error>
+    ) -> ::std::result::Result<&mut Self, crate::error::Error>
     {
         let index = self
             .elements
@@ -91,7 +91,7 @@ impl Context
         &mut self,
         element: Element,
         state: &state::State,
-    ) -> ::std::result::Result<(Self, Self), self::Error>
+    ) -> ::std::result::Result<(Self, Self), crate::error::Error>
     {
         let index = self
             .elements
