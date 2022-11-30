@@ -1,4 +1,4 @@
-use crate::context;
+use crate::{context, ty};
 
 #[derive(Debug)]
 pub(crate) enum Error
@@ -6,6 +6,10 @@ pub(crate) enum Error
     Context
     {
         error: context::Error
+    },
+    Ty
+    {
+        error: ty::Error
     },
 }
 
@@ -15,6 +19,7 @@ impl ::std::fmt::Display for Error
     {
         match self {
             Error::Context { error } => f.write_fmt(format_args!("{error}")),
+            Error::Ty { error } => f.write_fmt(format_args!("{error}")),
         }
     }
 }
@@ -25,6 +30,7 @@ impl ::std::error::Error for Error
     {
         match self {
             Error::Context { error } => Some(error),
+            Error::Ty { error } => Some(error),
         }
     }
 }
@@ -34,5 +40,13 @@ impl From<context::Error> for Error
     fn from(error: context::Error) -> Self
     {
         Error::Context { error }
+    }
+}
+
+impl From<ty::Error> for Error
+{
+    fn from(error: ty::Error) -> Self
+    {
+        Error::Ty { error }
     }
 }

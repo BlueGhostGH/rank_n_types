@@ -106,7 +106,9 @@ impl Type
 
                 Ok((to.fetch(state), delta))
             }
-            _ => todo!("Handle applying wrong type"),
+            _ => Err(Error::InvalidApplication {
+                kind: Kind::from(*self),
+            })?,
         }
     }
 
@@ -269,5 +271,34 @@ impl ::std::fmt::Display for Kind
             Kind::Quantification => f.write_str("quantification"),
             Kind::Function => f.write_str("function"),
         }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum Error
+{
+    InvalidApplication
+    {
+        kind: Kind
+    },
+}
+
+impl ::std::fmt::Display for Error
+{
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result
+    {
+        match self {
+            Error::InvalidApplication { kind } => {
+                f.write_fmt(format_args!("cannot apply a {kind} type"))
+            }
+        }
+    }
+}
+
+impl ::std::error::Error for Error
+{
+    fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)>
+    {
+        None
     }
 }
