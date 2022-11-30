@@ -57,7 +57,6 @@ pub(crate) enum Expression
         parameter: &'static str,
         body: Box<Expression>,
     },
-
     Application
     {
         function: Box<Expression>,
@@ -71,7 +70,7 @@ impl Expression
         &self,
         state: &mut state::State,
         context: &'ctx mut context::Context,
-    ) -> ::std::result::Result<(ty::Type, &'ctx mut context::Context), context::Error>
+    ) -> ::std::result::Result<(ty::Type, &'ctx mut context::Context), self::Error>
     {
         match self {
             Expression::Literal { literal } => Ok((
@@ -164,7 +163,7 @@ impl Expression
         ty: &ty::Type,
         state: &mut state::State,
         context: &'ctx mut context::Context,
-    ) -> ::std::result::Result<(ty::Type, &'ctx mut context::Context), context::Error>
+    ) -> ::std::result::Result<(ty::Type, &'ctx mut context::Context), self::Error>
     {
         match ty {
             ty::Type::Quantification { variable, codomain } => {
@@ -184,7 +183,7 @@ impl Expression
 
                 Ok((to.fetch(state), delta))
             }
-            _ => unimplemented!("{:?}", ty),
+            _ => todo!("Handle applying wrong type"),
         }
     }
 
@@ -193,7 +192,7 @@ impl Expression
         ty: &ty::Type,
         state: &mut state::State,
         context: &'ctx mut context::Context,
-    ) -> ::std::result::Result<&'ctx mut context::Context, context::Error>
+    ) -> ::std::result::Result<&'ctx mut context::Context, self::Error>
     {
         assert!(ty.is_well_formed(state, context));
         match (self, &ty) {
@@ -225,8 +224,43 @@ impl Expression
 
                 let a = a.apply_context(state, theta);
                 let b = ty.apply_context(state, theta);
-                crate::subtype(&a, &b, state, theta)
+
+                Ok(crate::subtype(&a, &b, state, theta)?)
             }
         }
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum Error
+{
+    Context(context::Error),
+}
+
+impl ::std::fmt::Display for Error
+{
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result
+    {
+        match self {
+            Error::Context(context_err) => f.write_fmt(format_args!("{context_err}")),
+        }
+    }
+}
+
+impl ::std::error::Error for Error
+{
+    fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)>
+    {
+        match self {
+            Error::Context(context_err) => Some(context_err),
+        }
+    }
+}
+
+impl From<context::Error> for Error
+{
+    fn from(context_err: context::Error) -> Self
+    {
+        Error::Context(context_err)
     }
 }
