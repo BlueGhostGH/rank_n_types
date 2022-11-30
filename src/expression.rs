@@ -24,6 +24,11 @@ impl Literal
             Literal::String(_) => ty::Literal::String,
         }
     }
+
+    fn checks_against_ty(&self, ty: &ty::Literal) -> bool
+    {
+        &self.synthesize() == ty
+    }
 }
 
 #[derive(Debug)]
@@ -220,8 +225,12 @@ impl Expression
     ) -> ::std::result::Result<&'ctx mut context::Context, self::Error>
     {
         assert!(ty.is_well_formed(state, context));
-        match (self, &ty) {
-            (Expression::Literal { literal }, ty::Type::Literal { ty }) => unimplemented!(),
+        match (self, ty) {
+            (Expression::Literal { literal }, ty::Type::Literal { ty }) => {
+                assert!(literal.checks_against_ty(ty));
+
+                Ok(context)
+            }
             (Expression::Abstraction { parameter, body }, ty::Type::Function { from, to }) => {
                 let typed_variable = context::Element::TypedVariable {
                     name: parameter,
@@ -234,7 +243,9 @@ impl Expression
                     .drain_until(typed_variable, state)?)
             }
             (Expression::Tuple { first, second }, ty::Type::Product { left, right }) => {
-                unimplemented!()
+                let gamma = first.checks_against(&left.fetch(state), state, context)?;
+
+                second.checks_against(&right.fetch(state), state, gamma)
             }
             (_, ty::Type::Quantification { variable, codomain }) => {
                 let variable = context::Element::Variable { name: variable };
