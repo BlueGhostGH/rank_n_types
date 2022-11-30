@@ -26,17 +26,20 @@ mod ty;
 
 mod error;
 
-fn synthesize_with_state(expression: expression::Expression, state: &mut state::State) -> ty::Type
+fn synthesize_with_state(
+    expression: expression::Expression,
+    state: &mut state::State,
+) -> ::std::result::Result<ty::Type, crate::error::Error>
 {
     let mut context = context::Context::initial();
-    // NOTE: This unwrap is temporary until proper error
-    // handling has been implemented for the whole crate
-    let (ty, new_context) = expression.synthesize(state, &mut context).unwrap();
+    let (ty, new_context) = expression.synthesize(state, &mut context)?;
 
-    ty.apply_context(state, new_context)
+    Ok(ty.apply_context(state, new_context))
 }
 
-fn synthesize(expression: expression::Expression) -> ty::Type
+fn synthesize(
+    expression: expression::Expression,
+) -> ::std::result::Result<ty::Type, crate::error::Error>
 {
     let mut state = state::State::initial();
 
@@ -46,7 +49,6 @@ fn synthesize(expression: expression::Expression) -> ty::Type
 #[cfg(test)]
 mod tests
 {
-
     use crate::{
         expression::Expression,
         expression::Literal,
@@ -73,9 +75,9 @@ mod tests
             synthesize(Expression::Literal {
                 literal: Literal::String("Foo"),
             }),
-            Type::Literal {
+            Ok(Type::Literal {
                 ty: ty::Literal::String
-            }
+            })
         )
     }
 
@@ -92,9 +94,9 @@ mod tests
                     literal: Literal::String("Foo"),
                 }
             }),
-            Type::Literal {
+            Ok(Type::Literal {
                 ty: ty::Literal::String
-            }
+            })
         )
     }
 
@@ -111,9 +113,9 @@ mod tests
                     literal: Literal::Bool(true)
                 }
             }),
-            Type::Literal {
+            Ok(Type::Literal {
                 ty: ty::Literal::Bool
-            }
+            })
         )
     }
 
@@ -125,10 +127,10 @@ mod tests
                 parameter: "x",
                 body: box Expression::Variable { name: "x" }
             }),
-            Type::Function {
+            Ok(Type::Function {
                 from: intern(Type::Existential { id: 0 }),
                 to: intern(Type::Existential { id: 0 })
-            }
+            })
         )
     }
 
@@ -160,9 +162,9 @@ mod tests
                 },
                 &mut state
             ),
-            Type::Literal {
+            Ok(Type::Literal {
                 ty: ty::Literal::String
-            }
+            })
         )
     }
 
@@ -178,14 +180,14 @@ mod tests
                     literal: Literal::Bool(true)
                 }
             }),
-            Type::Product {
+            Ok(Type::Product {
                 left: intern(Type::Literal {
                     ty: ty::Literal::String
                 }),
                 right: intern(Type::Literal {
                     ty: ty::Literal::Bool
                 })
-            }
+            })
         )
     }
 
@@ -205,14 +207,14 @@ mod tests
                     literal: Literal::String("foo")
                 }
             }),
-            Type::Product {
+            Ok(Type::Product {
                 left: intern(Type::Literal {
                     ty: ty::Literal::String
                 }),
                 right: intern(Type::Literal {
                     ty: ty::Literal::String
                 })
-            }
+            })
         )
     }
 
@@ -235,7 +237,7 @@ mod tests
                     literal: Literal::String("foo")
                 }
             }),
-            Type::Product {
+            Ok(Type::Product {
                 left: intern(Type::Literal {
                     ty: ty::Literal::String
                 }),
@@ -247,7 +249,7 @@ mod tests
                         ty: ty::Literal::String
                     })
                 })
-            }
+            })
         )
     }
 
@@ -284,14 +286,14 @@ mod tests
                 },
                 &mut state
             ),
-            Type::Product {
+            Ok(Type::Product {
                 left: intern(Type::Literal {
                     ty: ty::Literal::String
                 }),
                 right: intern(Type::Literal {
                     ty: ty::Literal::String
                 })
-            }
+            })
         )
     }
 
@@ -327,9 +329,9 @@ mod tests
                 },
                 &mut state
             ),
-            Type::Literal {
+            Ok(Type::Literal {
                 ty: ty::Literal::Bool
-            }
+            })
         )
     }
 
@@ -350,9 +352,9 @@ mod tests
                     literal: Literal::String("Foo")
                 }
             }),
-            Type::Literal {
+            Ok(Type::Literal {
                 ty: ty::Literal::String
-            }
+            })
         )
     }
 
@@ -396,14 +398,14 @@ mod tests
                 },
                 &mut state
             ),
-            Type::Product {
+            Ok(Type::Product {
                 left: intern(Type::Literal {
                     ty: ty::Literal::String
                 }),
                 right: intern(Type::Literal {
                     ty: ty::Literal::Bool
                 })
-            }
+            })
         )
     }
 }

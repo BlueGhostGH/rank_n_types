@@ -1,6 +1,6 @@
 use crate::{context, ty};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Error
 {
     Context

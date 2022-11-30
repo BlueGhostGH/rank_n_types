@@ -3,7 +3,7 @@ use crate::{
     ty,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct State
 {
     existentials_count: u64,

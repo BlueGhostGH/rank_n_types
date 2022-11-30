@@ -165,7 +165,7 @@ impl Context
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Error
 {
     ElementNotFound

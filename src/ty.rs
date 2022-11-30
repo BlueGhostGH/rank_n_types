@@ -343,7 +343,7 @@ fn instantiate_r<'ctx>(
     unimplemented!()
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Kind
 {
     Literal,
@@ -384,7 +384,7 @@ impl ::std::fmt::Display for Kind
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Error
 {
     InvalidApplication
