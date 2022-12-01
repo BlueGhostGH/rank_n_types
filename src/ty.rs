@@ -43,6 +43,18 @@ pub(crate) enum Type
     },
 }
 
+fn existential_id_from_variable(
+    variable: &str,
+) -> ::std::result::Result<u64, ::std::num::ParseIntError>
+{
+    // An existential name is of the shape t{n},
+    // where {n} is a whole, but existentials  are u64's,
+    // therefore the first char must be discarded
+    let n = &variable[1..];
+
+    n.parse()
+}
+
 impl Type
 {
     pub(crate) fn store(self, state: &mut state::State) -> intern::Intern<Self>
@@ -92,8 +104,7 @@ impl Type
             Type::Quantification { variable, codomain } => {
                 let alpha = state.fresh_existential();
                 let gamma = context.push(context::Element::Existential { id: alpha });
-                let substituted_a = substitute(
-                    &codomain.fetch(state),
+                let substituted_a = codomain.fetch(state).substitute(
                     variable,
                     &Type::Existential { id: alpha },
                     state,
@@ -145,6 +156,48 @@ impl Type
             Type::Function { from, to } => Type::Function {
                 from: from.fetch(state).apply_context(state, context).store(state),
                 to: to.fetch(state).apply_context(state, context).store(state),
+            },
+        }
+    }
+
+    pub(crate) fn substitute(&self, alpha: &str, ty: &Type, state: &mut state::State) -> Self
+    {
+        match self {
+            Type::Literal { .. } => *self,
+            Type::Product { left, right } => Type::Product {
+                left: left.fetch(state).substitute(alpha, ty, state).store(state),
+                right: right.fetch(state).substitute(alpha, ty, state).store(state),
+            },
+            Type::Variable { name } => {
+                if name == &alpha {
+                    *ty
+                } else {
+                    *self
+                }
+            }
+            &Type::Existential { id } => match existential_id_from_variable(alpha) {
+                Ok(alpha) if id == alpha => *ty,
+                _ => *self,
+            },
+            Type::Quantification { variable, codomain } => {
+                if variable == &alpha {
+                    Type::Quantification {
+                        variable,
+                        codomain: ty.store(state),
+                    }
+                } else {
+                    Type::Quantification {
+                        variable,
+                        codomain: codomain
+                            .fetch(state)
+                            .substitute(alpha, ty, state)
+                            .store(state),
+                    }
+                }
+            }
+            Type::Function { from, to } => Type::Function {
+                from: from.fetch(state).substitute(alpha, ty, state).store(state),
+                to: to.fetch(state).substitute(alpha, ty, state).store(state),
             },
         }
     }
@@ -202,23 +255,13 @@ impl Type
 
                 occurs_in_left || occurs_in_right
             }
-            Type::Variable { name } => {
-                // An existential name is of the shape t{n},
-                // where {n} is a whole, but existentials  are u64's,
-                // therefore the first char must be discarded
-                let n = &name[1..];
-
-                match n.parse() {
-                    Ok(beta) => alpha == beta,
-                    Err(_) => false,
-                }
-            }
+            Type::Variable { name } => match existential_id_from_variable(name) {
+                Ok(beta) => alpha == beta,
+                Err(_) => false,
+            },
             Type::Existential { id } => &alpha == id,
             Type::Quantification { variable, codomain } => {
-                // Same logic as for `Variable`
-                let n = &variable[1..];
-
-                match n.parse() {
+                match existential_id_from_variable(variable) {
                     Ok(beta) => alpha == beta,
                     Err(_) => codomain.fetch(state).has_existential(alpha, state),
                 }
@@ -230,24 +273,6 @@ impl Type
                 occurs_in_from || occurs_in_to
             }
         }
-    }
-}
-
-pub(crate) fn substitute(a: &Type, alpha: &str, b: &Type, state: &mut state::State) -> Type
-{
-    match a {
-        Type::Variable { name } => {
-            if name == &alpha {
-                *b
-            } else {
-                *a
-            }
-        }
-        Type::Function { from, to } => Type::Function {
-            from: substitute(&from.fetch(state), alpha, b, state).store(state),
-            to: substitute(&to.fetch(state), alpha, b, state).store(state),
-        },
-        _ => unimplemented!("{:?}", a),
     }
 }
 
