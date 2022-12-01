@@ -57,8 +57,7 @@ impl Context
             .iter()
             .position(|elem| elem == &element)
             .ok_or(Error::ElementNotFound {
-                state: state.clone(),
-                element,
+                element: element.with_kind(state),
             })?;
 
         let _count = self.elements.splice(index..=index, inserts).count();
@@ -77,8 +76,7 @@ impl Context
             .iter()
             .position(|elem| elem == &element)
             .ok_or(Error::ElementNotFound {
-                state: state.clone(),
-                element,
+                element: element.with_kind(state),
             })?;
 
         let _drained = self.elements.drain(index..);
@@ -98,8 +96,7 @@ impl Context
             .iter()
             .position(|elem| elem == &element)
             .ok_or(Error::ElementNotFound {
-                state: state.clone(),
-                element,
+                element: element.with_kind(state),
             })?;
 
         let (lhs, rhs) = self.elements.split_at(index);
@@ -166,12 +163,68 @@ impl Context
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub(super) enum ElementWithKind
+{
+    Variable
+    {
+        name: &'static str
+    },
+    TypedVariable
+    {
+        name: &'static str, kind: ty::Kind
+    },
+    Existential
+    {
+        id: u64
+    },
+    Solved
+    {
+        id: u64, kind: ty::Kind
+    },
+}
+
+impl ::std::fmt::Display for ElementWithKind
+{
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result
+    {
+        match self {
+            ElementWithKind::Variable { name } => f.write_fmt(format_args!("variable {name}")),
+            ElementWithKind::TypedVariable { name, kind } => {
+                f.write_fmt(format_args!("variable {name} of type {kind}"))
+            }
+            ElementWithKind::Existential { id } => f.write_fmt(format_args!("existential t{id}")),
+            ElementWithKind::Solved { id, kind } => {
+                f.write_fmt(format_args!("existential t{id} solved with type {kind}"))
+            }
+        }
+    }
+}
+
+impl Element
+{
+    fn with_kind(&self, state: &state::State) -> ElementWithKind
+    {
+        match self {
+            Element::Variable { name } => ElementWithKind::Variable { name },
+            Element::TypedVariable { name, ty } => ElementWithKind::TypedVariable {
+                name,
+                kind: ty::Kind::from(ty.fetch(state)),
+            },
+            &Element::Existential { id } => ElementWithKind::Existential { id },
+            &Element::Solved { id, ty } => ElementWithKind::Solved {
+                id,
+                kind: ty::Kind::from(ty.fetch(state)),
+            },
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Error
 {
     ElementNotFound
     {
-        state: state::State,
-        element: Element,
+        element: ElementWithKind
     },
 }
 
@@ -180,22 +233,7 @@ impl ::std::fmt::Display for Error
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result
     {
         match self {
-            Error::ElementNotFound { state, element } => {
-                let element = match element {
-                    Element::Variable { name } => format!("variable {name}"),
-                    Element::TypedVariable { name, ty } => {
-                        let kind = ty::Kind::from(ty.fetch(state));
-
-                        format!("variable {name} of type {kind}")
-                    }
-                    Element::Existential { id } => format!("existential t{id}"),
-                    Element::Solved { id, ty } => {
-                        let kind = ty::Kind::from(ty.fetch(state));
-
-                        format!("existential t{id} solved with type {kind}")
-                    }
-                };
-
+            Error::ElementNotFound { element } => {
                 f.write_fmt(format_args!("could not find the {element} in context"))
             }
         }
