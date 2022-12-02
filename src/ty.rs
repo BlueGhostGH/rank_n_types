@@ -276,10 +276,42 @@ pub(crate) fn subtype<'ctx>(
     assert!(b.is_well_formed(state, context));
 
     match (a, b) {
+        (Type::Literal { ty: t0 }, Type::Literal { ty: t1 }) => {
+            assert_eq!(t0, t1);
+
+            Ok(context)
+        }
+        (
+            Type::Product {
+                left: l0,
+                right: r0,
+            },
+            Type::Product {
+                left: l1,
+                right: r1,
+            },
+        ) => {
+            let gamma = subtype(&l0.fetch(state), &l1.fetch(state), state, context)?;
+
+            subtype(&r0.fetch(state), &r1.fetch(state), state, gamma)
+        }
         (Type::Variable { name: alpha }, Type::Variable { name: beta }) => {
             assert_eq!(alpha, beta);
 
             Ok(context)
+        }
+        (Type::Existential { id: alpha }, Type::Existential { id: beta }) if alpha == beta => {
+            Ok(context)
+        }
+        (Type::Function { from: f0, to: t0 }, Type::Function { from: f1, to: t1 }) => {
+            let theta = subtype(&f0.fetch(state), &f1.fetch(state), state, context)?;
+
+            subtype(
+                &t0.fetch(state).apply_context(state, theta),
+                &t1.fetch(state).apply_context(state, theta),
+                state,
+                theta,
+            )
         }
         (Type::Existential { id }, _) => {
             if !b.has_existential(id, state) {
@@ -295,7 +327,27 @@ pub(crate) fn subtype<'ctx>(
                 todo!("Handle circular subtyping")
             }
         }
-        _ => unimplemented!("{:?}", (a, b)),
+        (Type::Quantification { variable, codomain }, _) => {
+            let alpha = state.fresh_existential();
+
+            let gamma = context
+                .push(context::Element::Marker { id: alpha })
+                .push(context::Element::Existential { id: alpha });
+            let codomain =
+                codomain
+                    .fetch(state)
+                    .substitute(&alpha, &Type::Existential { id: alpha }, state);
+            let delta = subtype(&codomain, b, state, context)?;
+
+            delta.drain_until(context::Element::Marker { id: alpha }, state)
+        }
+        (_, Type::Quantification { variable, codomain }) => {
+            let theta = context.push(context::Element::Variable { name: *variable });
+            let delta = subtype(a, b, state, theta)?;
+
+            delta.drain_until(context::Element::Variable { name: *variable }, state)
+        }
+        _ => todo!("Handle subtyping between incompatible types"),
     }
 }
 
