@@ -1,4 +1,4 @@
-use crate::{context, expression, intern, state};
+use crate::{context, expression, intern, state, variable};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(crate) enum Literal
@@ -25,15 +25,15 @@ pub(crate) enum Type
     },
     Variable
     {
-        name: &'static str
+        name: variable::Variable
     },
     Existential
     {
-        id: u64
+        id: variable::Variable
     },
     Quantification
     {
-        variable: &'static str,
+        variable: variable::Variable,
         codomain: intern::Intern<Type>,
     },
     Function
@@ -41,18 +41,6 @@ pub(crate) enum Type
         from: intern::Intern<Type>,
         to: intern::Intern<Type>,
     },
-}
-
-fn existential_id_from_variable(
-    variable: &str,
-) -> ::std::result::Result<u64, ::std::num::ParseIntError>
-{
-    // An existential name is of the shape t{n},
-    // where {n} is a whole, but existentials  are u64's,
-    // therefore the first char must be discarded
-    let n = &variable[1..];
-
-    n.parse()
 }
 
 impl Type
@@ -137,7 +125,7 @@ impl Type
             },
             Type::Variable { .. } => self,
             Type::Existential { id } => {
-                if let Some(tau) = context.fetch_solved(id, state) {
+                if let Some(tau) = context.fetch_solved(&id, state) {
                     tau.apply_context(state, context)
                 } else {
                     self
@@ -160,7 +148,12 @@ impl Type
         }
     }
 
-    pub(crate) fn substitute(&self, alpha: &str, ty: &Type, state: &mut state::State) -> Self
+    pub(crate) fn substitute(
+        &self,
+        alpha: &variable::Variable,
+        ty: &Type,
+        state: &mut state::State,
+    ) -> Self
     {
         match self {
             Type::Literal { .. } => *self,
@@ -169,25 +162,28 @@ impl Type
                 right: right.fetch(state).substitute(alpha, ty, state).store(state),
             },
             Type::Variable { name } => {
-                if name == &alpha {
+                if name == alpha {
                     *ty
                 } else {
                     *self
                 }
             }
-            &Type::Existential { id } => match existential_id_from_variable(alpha) {
-                Ok(alpha) if id == alpha => *ty,
-                _ => *self,
-            },
+            Type::Existential { id } => {
+                if id == alpha {
+                    *ty
+                } else {
+                    *self
+                }
+            }
             Type::Quantification { variable, codomain } => {
-                if variable == &alpha {
+                if variable == alpha {
                     Type::Quantification {
-                        variable,
+                        variable: *variable,
                         codomain: ty.store(state),
                     }
                 } else {
                     Type::Quantification {
-                        variable,
+                        variable: *variable,
                         codomain: codomain
                             .fetch(state)
                             .substitute(alpha, ty, state)
@@ -216,16 +212,11 @@ impl Type
             }
             Type::Variable { name } => context.has_variable(name),
             Type::Existential { id } => {
-                context.has_existential(*id) || context.fetch_solved(*id, state).is_some()
+                context.has_existential(id) || context.fetch_solved(id, state).is_some()
             }
-            Type::Quantification {
-                variable: variable_name,
-                codomain,
-            } => codomain.fetch(state).is_well_formed(
+            Type::Quantification { variable, codomain } => codomain.fetch(state).is_well_formed(
                 state,
-                context.push(context::Element::Variable {
-                    name: variable_name,
-                }),
+                context.push(context::Element::Variable { name: *variable }),
             ),
             Type::Function { from, to } => {
                 from.fetch(state).is_well_formed(state, context)
@@ -245,7 +236,7 @@ impl Type
         }
     }
 
-    pub(crate) fn has_existential(&self, alpha: u64, state: &state::State) -> bool
+    pub(crate) fn has_existential(&self, alpha: &variable::Variable, state: &state::State) -> bool
     {
         match self {
             Type::Literal { .. } => false,
@@ -255,17 +246,15 @@ impl Type
 
                 occurs_in_left || occurs_in_right
             }
-            Type::Variable { name } => match existential_id_from_variable(name) {
-                Ok(beta) => alpha == beta,
-                Err(_) => false,
+            Type::Variable { name } => name == alpha,
+            Type::Existential { id } => id == alpha,
+            Type::Quantification { variable, codomain } => match (alpha, variable) {
+                (
+                    variable::Variable::Existential { id: alpha },
+                    variable::Variable::Existential { id: beta },
+                ) => alpha == beta,
+                (_, _) => codomain.fetch(state).has_existential(alpha, state),
             },
-            Type::Existential { id } => &alpha == id,
-            Type::Quantification { variable, codomain } => {
-                match existential_id_from_variable(variable) {
-                    Ok(beta) => alpha == beta,
-                    Err(_) => codomain.fetch(state).has_existential(alpha, state),
-                }
-            }
             Type::Function { from, to } => {
                 let occurs_in_from = from.fetch(state).has_existential(alpha, state);
                 let occurs_in_to = to.fetch(state).has_existential(alpha, state);
@@ -283,25 +272,27 @@ pub(crate) fn subtype<'ctx>(
     context: &'ctx mut context::Context,
 ) -> ::std::result::Result<&'ctx mut context::Context, crate::error::Error>
 {
+    assert!(a.is_well_formed(state, context));
+    assert!(b.is_well_formed(state, context));
+
     match (a, b) {
         (Type::Variable { name: alpha }, Type::Variable { name: beta }) => {
-            assert!(a.is_well_formed(state, context));
             assert_eq!(alpha, beta);
 
             Ok(context)
         }
         (Type::Existential { id }, _) => {
-            if !b.has_existential(*id, state) {
-                instantiate_l(*id, b, state, context)
+            if !b.has_existential(id, state) {
+                instantiate_l(id, b, state, context)
             } else {
-                unimplemented!()
+                todo!("Handle circular subtyping")
             }
         }
         (_, Type::Existential { id }) => {
-            if !a.has_existential(*id, state) {
-                instantiate_r(a, *id, state, context)
+            if !a.has_existential(id, state) {
+                instantiate_r(a, id, state, context)
             } else {
-                unimplemented!()
+                todo!("Handle circular subtyping")
             }
         }
         _ => unimplemented!("{:?}", (a, b)),
@@ -309,20 +300,20 @@ pub(crate) fn subtype<'ctx>(
 }
 
 fn instantiate_l<'ctx>(
-    alpha: u64,
+    alpha: &variable::Variable,
     b: &Type,
     state: &mut state::State,
     context: &'ctx mut context::Context,
 ) -> ::std::result::Result<&'ctx mut context::Context, crate::error::Error>
 {
     let (mut left_context, right_context) =
-        context.split_at(context::Element::Existential { id: alpha }, state)?;
+        context.split_at(context::Element::Existential { id: *alpha }, state)?;
 
     if b.is_monotype(state) && b.is_well_formed(state, &mut left_context) {
         return context.insert_in_place(
-            context::Element::Existential { id: alpha },
+            context::Element::Existential { id: *alpha },
             [context::Element::SolvedExistential {
-                id: alpha,
+                id: *alpha,
                 ty: b.store(state),
             }],
             state,
@@ -335,7 +326,7 @@ fn instantiate_l<'ctx>(
                 context::Element::Existential { id },
                 [context::Element::SolvedExistential {
                     id,
-                    ty: Type::Existential { id: alpha }.store(state),
+                    ty: Type::Existential { id: *alpha }.store(state),
                 }],
                 state,
             );
@@ -346,19 +337,19 @@ fn instantiate_l<'ctx>(
 
 fn instantiate_r<'ctx>(
     a: &Type,
-    alpha: u64,
+    alpha: &variable::Variable,
     state: &mut state::State,
     context: &'ctx mut context::Context,
 ) -> ::std::result::Result<&'ctx mut context::Context, crate::error::Error>
 {
     let (mut left_context, right_context) =
-        context.split_at(context::Element::Existential { id: alpha }, state)?;
+        context.split_at(context::Element::Existential { id: *alpha }, state)?;
 
     if a.is_monotype(state) && a.is_well_formed(state, &mut left_context) {
         return context.insert_in_place(
-            context::Element::Existential { id: alpha },
+            context::Element::Existential { id: *alpha },
             [context::Element::SolvedExistential {
-                id: alpha,
+                id: *alpha,
                 ty: a.store(state),
             }],
             state,

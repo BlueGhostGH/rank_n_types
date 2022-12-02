@@ -1,4 +1,4 @@
-use crate::{context, state, ty};
+use crate::{context, state, ty, variable};
 
 #[derive(Debug)]
 pub(crate) enum Literal
@@ -99,14 +99,14 @@ impl Expression
             Expression::Let { name, expr, body } => {
                 let (t0, gamma) = expr.synthesize(state, context)?;
                 let theta = gamma.push(context::Element::TypedVariable {
-                    name,
+                    name: variable::Variable::Named { name },
                     ty: t0.store(state),
                 });
 
                 let (t1, delta) = body.synthesize(state, theta)?;
                 let omega = delta.insert_in_place(
                     context::Element::TypedVariable {
-                        name,
+                        name: variable::Variable::Named { name },
                         ty: t0.store(state),
                     },
                     [],
@@ -115,10 +115,12 @@ impl Expression
 
                 Ok((t1, omega))
             }
-            Expression::Variable { name } => match context.fetch_annotation(name, state) {
-                Some(annotation) => Ok((annotation, context)),
-                None => unreachable!(),
-            },
+            Expression::Variable { name } => {
+                match context.fetch_annotation(&variable::Variable::Named { name }, state) {
+                    Some(annotation) => Ok((annotation, context)),
+                    None => unreachable!(),
+                }
+            }
             Expression::Annotation { expr, ty } => {
                 assert!(ty.is_well_formed(state, context));
 
@@ -134,7 +136,7 @@ impl Expression
                     .push(context::Element::Existential { id: alpha })
                     .push(context::Element::Existential { id: beta })
                     .push(context::Element::TypedVariable {
-                        name: parameter,
+                        name: variable::Variable::Named { name: parameter },
                         ty: ty::Type::Existential { id: alpha }.store(state),
                     });
 
@@ -142,7 +144,7 @@ impl Expression
                     .checks_against(&ty::Type::Existential { id: beta }, state, gamma)?
                     .drain_until(
                         context::Element::TypedVariable {
-                            name: parameter,
+                            name: variable::Variable::Named { name: parameter },
                             ty: ty::Type::Existential { id: alpha }.store(state),
                         },
                         state,
@@ -180,7 +182,7 @@ impl Expression
             }
             (Expression::Abstraction { parameter, body }, ty::Type::Function { from, to }) => {
                 let typed_variable = context::Element::TypedVariable {
-                    name: parameter,
+                    name: variable::Variable::Named { name: parameter },
                     ty: *from,
                 };
                 let gamma = context.push(typed_variable);
@@ -195,7 +197,7 @@ impl Expression
                 second.checks_against(&right.fetch(state), state, gamma)
             }
             (_, ty::Type::Quantification { variable, codomain }) => {
-                let variable = context::Element::Variable { name: variable };
+                let variable = context::Element::Variable { name: *variable };
                 let gamma = context.push(variable);
 
                 Ok(self

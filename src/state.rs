@@ -1,6 +1,6 @@
 use crate::{
     intern::{self, Interner},
-    ty,
+    ty, variable,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,12 +20,12 @@ impl State
         }
     }
 
-    pub(crate) fn fresh_existential(&mut self) -> u64
+    pub(crate) fn fresh_existential(&mut self) -> variable::Variable
     {
-        let existential = self.existentials_count;
+        let id = self.existentials_count;
         self.existentials_count += 1;
 
-        existential
+        variable::Variable::Existential { id }
     }
 }
 

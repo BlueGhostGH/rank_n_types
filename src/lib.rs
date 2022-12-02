@@ -23,6 +23,7 @@ mod expression;
 mod intern;
 mod state;
 mod ty;
+mod variable;
 
 mod error;
 
@@ -56,6 +57,7 @@ mod tests
         state::State,
         synthesize, synthesize_with_state,
         ty::{self, Type},
+        variable::Variable,
     };
 
     fn intern<T>(value: T) -> intern::Intern<T>
@@ -128,8 +130,12 @@ mod tests
                 body: box Expression::Variable { name: "x" }
             }),
             Ok(Type::Function {
-                from: intern(Type::Existential { id: 0 }),
-                to: intern(Type::Existential { id: 0 })
+                from: intern(Type::Existential {
+                    id: Variable::Existential { id: 0 }
+                }),
+                to: intern(Type::Existential {
+                    id: Variable::Existential { id: 0 }
+                })
             })
         )
     }
@@ -148,10 +154,16 @@ mod tests
                             body: box Expression::Variable { name: "x" }
                         },
                         ty: Type::Quantification {
-                            variable: "t",
+                            variable: Variable::Named { name: "t" },
                             codomain: Type::Function {
-                                from: Type::Variable { name: "t" }.store(&mut state),
-                                to: Type::Variable { name: "t" }.store(&mut state)
+                                from: Type::Variable {
+                                    name: Variable::Named { name: "t" }
+                                }
+                                .store(&mut state),
+                                to: Type::Variable {
+                                    name: Variable::Named { name: "t" }
+                                }
+                                .store(&mut state)
                             }
                             .store(&mut state)
                         }
@@ -267,10 +279,16 @@ mod tests
                             body: box Expression::Variable { name: "x" }
                         },
                         ty: Type::Quantification {
-                            variable: "t",
+                            variable: Variable::Named { name: "t" },
                             codomain: Type::Function {
-                                from: Type::Variable { name: "t" }.store(&mut state),
-                                to: Type::Variable { name: "t" }.store(&mut state)
+                                from: Type::Variable {
+                                    name: Variable::Named { name: "t" }
+                                }
+                                .store(&mut state),
+                                to: Type::Variable {
+                                    name: Variable::Named { name: "t" }
+                                }
+                                .store(&mut state)
                             }
                             .store(&mut state)
                         }
@@ -316,10 +334,16 @@ mod tests
                                 body: box Expression::Variable { name: "x" }
                             },
                             ty: Type::Quantification {
-                                variable: "t",
+                                variable: Variable::Named { name: "t" },
                                 codomain: Type::Function {
-                                    from: Type::Variable { name: "t" }.store(&mut state),
-                                    to: Type::Variable { name: "t" }.store(&mut state)
+                                    from: Type::Variable {
+                                        name: Variable::Named { name: "t" }
+                                    }
+                                    .store(&mut state),
+                                    to: Type::Variable {
+                                        name: Variable::Named { name: "t" }
+                                    }
+                                    .store(&mut state)
                                 }
                                 .store(&mut state)
                             }
@@ -373,10 +397,16 @@ mod tests
                             body: box Expression::Variable { name: "x" }
                         },
                         ty: Type::Quantification {
-                            variable: "t",
+                            variable: Variable::Named { name: "t" },
                             codomain: Type::Function {
-                                from: Type::Variable { name: "t" }.store(&mut state),
-                                to: Type::Variable { name: "t" }.store(&mut state)
+                                from: Type::Variable {
+                                    name: Variable::Named { name: "t" }
+                                }
+                                .store(&mut state),
+                                to: Type::Variable {
+                                    name: Variable::Named { name: "t" }
+                                }
+                                .store(&mut state)
                             }
                             .store(&mut state)
                         }

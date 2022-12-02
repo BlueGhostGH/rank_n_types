@@ -1,29 +1,29 @@
-use crate::{intern, state, ty};
+use crate::{intern, state, ty, variable};
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(crate) enum Element
 {
     Variable
     {
-        name: &'static str
+        name: variable::Variable
     },
     TypedVariable
     {
-        name: &'static str,
+        name: variable::Variable,
         ty: intern::Intern<ty::Type>,
     },
     Existential
     {
-        id: u64
+        id: variable::Variable
     },
     SolvedExistential
     {
-        id: u64,
+        id: variable::Variable,
         ty: intern::Intern<ty::Type>,
     },
     Marker
     {
-        id: u64
+        id: variable::Variable
     },
 }
 
@@ -117,23 +117,23 @@ impl Context
         Ok((left_context, right_context))
     }
 
-    pub(crate) fn has_variable(&self, alpha: &'static str) -> bool
+    pub(crate) fn has_variable(&self, name: &variable::Variable) -> bool
     {
         self.elements
             .iter()
-            .any(|elem| elem == &Element::Variable { name: alpha })
+            .any(|elem| elem == &Element::Variable { name: *name })
     }
 
-    pub(crate) fn has_existential(&self, alpha: u64) -> bool
+    pub(crate) fn has_existential(&self, id: &variable::Variable) -> bool
     {
         self.elements
             .iter()
-            .any(|elem| elem == &Element::Existential { id: alpha })
+            .any(|elem| elem == &Element::Existential { id: *id })
     }
 
     pub(crate) fn fetch_annotation(
         &self,
-        variable_name: &str,
+        alpha: &variable::Variable,
         state: &state::State,
     ) -> Option<ty::Type>
     {
@@ -146,11 +146,15 @@ impl Context
                     None
                 }
             })
-            .find(|(name, _)| name == &&variable_name)
+            .find(|(name, _)| name == &alpha)
             .map(|(_, ty)| ty.fetch(state))
     }
 
-    pub(crate) fn fetch_solved(&self, alpha: u64, state: &state::State) -> Option<ty::Type>
+    pub(crate) fn fetch_solved(
+        &self,
+        alpha: &variable::Variable,
+        state: &state::State,
+    ) -> Option<ty::Type>
     {
         self.elements
             .iter()
@@ -161,7 +165,7 @@ impl Context
                     None
                 }
             })
-            .find(|(id, _)| id == &&alpha)
+            .find(|(id, _)| id == &alpha)
             .map(|(_, ty)| ty.fetch(state))
     }
 }
@@ -171,23 +175,25 @@ pub(super) enum ElementWithKind
 {
     Variable
     {
-        name: &'static str
+        name: variable::Variable
     },
     TypedVariable
     {
-        name: &'static str, kind: ty::Kind
+        name: variable::Variable,
+        kind: ty::Kind,
     },
     Existential
     {
-        id: u64
+        id: variable::Variable
     },
     Solved
     {
-        id: u64, kind: ty::Kind
+        id: variable::Variable,
+        kind: ty::Kind,
     },
     Marker
     {
-        id: u64
+        id: variable::Variable
     },
 }
 
@@ -200,9 +206,9 @@ impl ::std::fmt::Display for ElementWithKind
             ElementWithKind::TypedVariable { name, kind } => {
                 f.write_fmt(format_args!("variable {name} of type {kind}"))
             }
-            ElementWithKind::Existential { id } => f.write_fmt(format_args!("existential t{id}")),
+            ElementWithKind::Existential { id } => f.write_fmt(format_args!("existential {id}")),
             ElementWithKind::Solved { id, kind } => {
-                f.write_fmt(format_args!("existential t{id} solved with type {kind}"))
+                f.write_fmt(format_args!("existential {id} solved with type {kind}"))
             }
             ElementWithKind::Marker { id } => f.write_fmt(format_args!("marker {id}")),
         }
@@ -213,18 +219,18 @@ impl Element
 {
     fn with_kind(&self, state: &state::State) -> ElementWithKind
     {
-        match self {
+        match *self {
             Element::Variable { name } => ElementWithKind::Variable { name },
             Element::TypedVariable { name, ty } => ElementWithKind::TypedVariable {
                 name,
                 kind: ty::Kind::from(ty.fetch(state)),
             },
-            &Element::Existential { id } => ElementWithKind::Existential { id },
-            &Element::SolvedExistential { id, ty } => ElementWithKind::Solved {
+            Element::Existential { id } => ElementWithKind::Existential { id },
+            Element::SolvedExistential { id, ty } => ElementWithKind::Solved {
                 id,
                 kind: ty::Kind::from(ty.fetch(state)),
             },
-            &Element::Marker { id } => ElementWithKind::Marker { id },
+            Element::Marker { id } => ElementWithKind::Marker { id },
         }
     }
 }
