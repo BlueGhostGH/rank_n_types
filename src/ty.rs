@@ -85,7 +85,7 @@ impl Type
                     [
                         context::Element::Existential { id: beta },
                         context::Element::Existential { id: alpha },
-                        context::Element::Solved {
+                        context::Element::SolvedExistential {
                             id,
                             ty: Type::Function {
                                 from: Type::Existential { id: alpha }.store(state),
@@ -321,7 +321,7 @@ fn instantiate_l<'ctx>(
     if b.is_monotype(state) && b.is_well_formed(state, &mut left_context) {
         return context.insert_in_place(
             context::Element::Existential { id: alpha },
-            [context::Element::Solved {
+            [context::Element::SolvedExistential {
                 id: alpha,
                 ty: b.store(state),
             }],
@@ -333,7 +333,7 @@ fn instantiate_l<'ctx>(
         &Type::Existential { id } => {
             return context.insert_in_place(
                 context::Element::Existential { id },
-                [context::Element::Solved {
+                [context::Element::SolvedExistential {
                     id,
                     ty: Type::Existential { id: alpha }.store(state),
                 }],
@@ -357,7 +357,7 @@ fn instantiate_r<'ctx>(
     if a.is_monotype(state) && a.is_well_formed(state, &mut left_context) {
         return context.insert_in_place(
             context::Element::Existential { id: alpha },
-            [context::Element::Solved {
+            [context::Element::SolvedExistential {
                 id: alpha,
                 ty: a.store(state),
             }],

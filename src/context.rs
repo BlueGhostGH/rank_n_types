@@ -16,10 +16,14 @@ pub(crate) enum Element
     {
         id: u64
     },
-    Solved
+    SolvedExistential
     {
         id: u64,
         ty: intern::Intern<ty::Type>,
+    },
+    Marker
+    {
+        id: u64
     },
 }
 
@@ -151,7 +155,7 @@ impl Context
         self.elements
             .iter()
             .filter_map(|elem| {
-                if let Element::Solved { id, ty } = elem {
+                if let Element::SolvedExistential { id, ty } = elem {
                     Some((id, ty))
                 } else {
                     None
@@ -181,6 +185,10 @@ pub(super) enum ElementWithKind
     {
         id: u64, kind: ty::Kind
     },
+    Marker
+    {
+        id: u64
+    },
 }
 
 impl ::std::fmt::Display for ElementWithKind
@@ -196,6 +204,7 @@ impl ::std::fmt::Display for ElementWithKind
             ElementWithKind::Solved { id, kind } => {
                 f.write_fmt(format_args!("existential t{id} solved with type {kind}"))
             }
+            ElementWithKind::Marker { id } => f.write_fmt(format_args!("marker {id}")),
         }
     }
 }
@@ -211,10 +220,11 @@ impl Element
                 kind: ty::Kind::from(ty.fetch(state)),
             },
             &Element::Existential { id } => ElementWithKind::Existential { id },
-            &Element::Solved { id, ty } => ElementWithKind::Solved {
+            &Element::SolvedExistential { id, ty } => ElementWithKind::Solved {
                 id,
                 kind: ty::Kind::from(ty.fetch(state)),
             },
+            &Element::Marker { id } => ElementWithKind::Marker { id },
         }
     }
 }
