@@ -392,28 +392,28 @@ fn instantiate_left<'ctx>(
             delta.drain_until(context::Element::Variable { name: *variable }, state)
         }
         Type::Function { from, to } => {
-            let alpha1 = state.fresh_existential();
-            let alpha2 = state.fresh_existential();
+            let beta1 = state.fresh_existential();
+            let beta2 = state.fresh_existential();
 
             let gamma = context.insert_in_place(
                 context::Element::Existential { id: *alpha },
                 [
-                    context::Element::Existential { id: alpha2 },
-                    context::Element::Existential { id: alpha1 },
+                    context::Element::Existential { id: beta2 },
+                    context::Element::Existential { id: beta1 },
                     context::Element::SolvedExistential {
                         id: *alpha,
                         ty: Type::Function {
-                            from: Type::Existential { id: alpha1 }.store(state),
-                            to: Type::Existential { id: alpha2 }.store(state),
+                            from: Type::Existential { id: beta1 }.store(state),
+                            to: Type::Existential { id: beta2 }.store(state),
                         }
                         .store(state),
                     },
                 ],
                 state,
             )?;
-            let theta = instantiate_right(&from.fetch(state), &alpha1, state, gamma)?;
+            let theta = instantiate_right(&from.fetch(state), &beta1, state, gamma)?;
             let delta = instantiate_left(
-                &alpha2,
+                &beta2,
                 &to.fetch(state).apply_context(state, &theta),
                 state,
                 theta,
@@ -446,7 +446,96 @@ fn instantiate_right<'ctx>(
         );
     }
 
-    unimplemented!()
+    match a {
+        Type::Product { left, right } => {
+            let alpha1 = state.fresh_existential();
+            let alpha2 = state.fresh_existential();
+
+            let gamma = context.insert_in_place(
+                context::Element::Existential { id: *beta },
+                [
+                    context::Element::Existential { id: alpha2 },
+                    context::Element::Existential { id: alpha1 },
+                    context::Element::SolvedExistential {
+                        id: *beta,
+                        ty: Type::Product {
+                            left: Type::Existential { id: alpha1 }.store(state),
+                            right: Type::Existential { id: alpha2 }.store(state),
+                        }
+                        .store(state),
+                    },
+                ],
+                state,
+            )?;
+            let theta = instantiate_left(&alpha1, &left.fetch(state), state, gamma)?;
+            let delta = instantiate_right(
+                &right.fetch(state).apply_context(state, theta),
+                &alpha2,
+                state,
+                theta,
+            )?;
+
+            Ok(delta)
+        }
+        &Type::Existential { id } => context.insert_in_place(
+            context::Element::Existential { id },
+            [context::Element::SolvedExistential {
+                id,
+                ty: Type::Existential { id: *beta }.store(state),
+            }],
+            state,
+        ),
+        Type::Quantification { variable, codomain } => {
+            let alpha = state.fresh_existential();
+
+            let gamma = context
+                .push(context::Element::Marker { id: alpha })
+                .push(context::Element::Existential { id: alpha });
+            let delta = instantiate_right(
+                &codomain.fetch(state).substitute(
+                    variable,
+                    &Type::Existential { id: alpha },
+                    state,
+                ),
+                beta,
+                state,
+                gamma,
+            )?;
+
+            delta.drain_until(context::Element::Marker { id: alpha }, state)
+        }
+        Type::Function { from, to } => {
+            let alpha1 = state.fresh_existential();
+            let alpha2 = state.fresh_existential();
+
+            let gamma = context.insert_in_place(
+                context::Element::Existential { id: *beta },
+                [
+                    context::Element::Existential { id: alpha2 },
+                    context::Element::Existential { id: alpha1 },
+                    context::Element::SolvedExistential {
+                        id: *beta,
+                        ty: Type::Function {
+                            from: Type::Existential { id: alpha1 }.store(state),
+                            to: Type::Existential { id: alpha2 }.store(state),
+                        }
+                        .store(state),
+                    },
+                ],
+                state,
+            )?;
+            let theta = instantiate_left(&alpha1, &from.fetch(state), state, gamma)?;
+            let delta = instantiate_right(
+                &to.fetch(state).apply_context(state, theta),
+                &alpha2,
+                state,
+                theta,
+            );
+
+            delta
+        }
+        _ => todo!("Handle instantiating right an invalid type"),
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
