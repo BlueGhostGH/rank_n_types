@@ -315,14 +315,14 @@ pub(crate) fn subtype<'ctx>(
         }
         (Type::Existential { id }, _) => {
             if !b.has_existential(id, state) {
-                instantiate_l(id, b, state, context)
+                instantiate_left(id, b, state, context)
             } else {
                 todo!("Handle circular subtyping")
             }
         }
         (_, Type::Existential { id }) => {
             if !a.has_existential(id, state) {
-                instantiate_r(a, id, state, context)
+                instantiate_right(a, id, state, context)
             } else {
                 todo!("Handle circular subtyping")
             }
@@ -351,7 +351,7 @@ pub(crate) fn subtype<'ctx>(
     }
 }
 
-fn instantiate_l<'ctx>(
+fn instantiate_left<'ctx>(
     alpha: &variable::Variable,
     b: &Type,
     state: &mut state::State,
@@ -373,35 +373,73 @@ fn instantiate_l<'ctx>(
     }
 
     match b {
-        &Type::Existential { id } => {
-            return context.insert_in_place(
-                context::Element::Existential { id },
-                [context::Element::SolvedExistential {
-                    id,
-                    ty: Type::Existential { id: *alpha }.store(state),
-                }],
+        &Type::Existential { id } => context.insert_in_place(
+            context::Element::Existential { id },
+            [context::Element::SolvedExistential {
+                id,
+                ty: Type::Existential { id: *alpha }.store(state),
+            }],
+            state,
+        ),
+        Type::Quantification { variable, codomain } => {
+            let delta = instantiate_left(
+                alpha,
+                b,
                 state,
-            );
+                context.push(context::Element::Variable { name: *variable }),
+            )?;
+
+            delta.drain_until(context::Element::Variable { name: *variable }, state)
         }
-        _ => unimplemented!(),
+        Type::Function { from, to } => {
+            let alpha1 = state.fresh_existential();
+            let alpha2 = state.fresh_existential();
+
+            let gamma = context.insert_in_place(
+                context::Element::Existential { id: *alpha },
+                [
+                    context::Element::Existential { id: alpha2 },
+                    context::Element::Existential { id: alpha1 },
+                    context::Element::SolvedExistential {
+                        id: *alpha,
+                        ty: Type::Function {
+                            from: Type::Existential { id: alpha1 }.store(state),
+                            to: Type::Existential { id: alpha2 }.store(state),
+                        }
+                        .store(state),
+                    },
+                ],
+                state,
+            )?;
+            let theta = instantiate_right(&from.fetch(state), &alpha1, state, gamma)?;
+            let delta = instantiate_left(
+                &alpha2,
+                &to.fetch(state).apply_context(state, &theta),
+                state,
+                theta,
+            )?;
+
+            Ok(delta)
+        }
+        _ => todo!("Handle instantiating left an invalid type"),
     }
 }
 
-fn instantiate_r<'ctx>(
+fn instantiate_right<'ctx>(
     a: &Type,
-    alpha: &variable::Variable,
+    beta: &variable::Variable,
     state: &mut state::State,
     context: &'ctx mut context::Context,
 ) -> ::std::result::Result<&'ctx mut context::Context, crate::error::Error>
 {
     let (mut left_context, right_context) =
-        context.split_at(context::Element::Existential { id: *alpha }, state)?;
+        context.split_at(context::Element::Existential { id: *beta }, state)?;
 
     if a.is_monotype(state) && a.is_well_formed(state, &mut left_context) {
         return context.insert_in_place(
-            context::Element::Existential { id: *alpha },
+            context::Element::Existential { id: *beta },
             [context::Element::SolvedExistential {
-                id: *alpha,
+                id: *beta,
                 ty: a.store(state),
             }],
             state,
