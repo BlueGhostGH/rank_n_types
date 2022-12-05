@@ -317,14 +317,22 @@ pub(crate) fn subtype<'ctx>(
             if !b.has_existential(id, state) {
                 instantiate_left(id, b, state, context)
             } else {
-                todo!("Handle circular subtyping")
+                Err(Error::CircularSubtyping {
+                    kind_a: Kind::from(*b),
+                    kind_b: Kind::from(*a),
+                    alpha: *id,
+                })?
             }
         }
         (_, Type::Existential { id }) => {
             if !a.has_existential(id, state) {
                 instantiate_right(a, id, state, context)
             } else {
-                todo!("Handle circular subtyping")
+                Err(Error::CircularSubtyping {
+                    kind_a: Kind::from(*a),
+                    kind_b: Kind::from(*b),
+                    alpha: *id,
+                })?
             }
         }
         (Type::Quantification { variable, codomain }, _) => {
@@ -347,7 +355,10 @@ pub(crate) fn subtype<'ctx>(
 
             delta.drain_until(context::Element::Variable { name: *variable }, state)
         }
-        _ => todo!("Handle subtyping between incompatible types"),
+        _ => Err(Error::InvalidSubtyping {
+            kind_a: Kind::from(*a),
+            kind_b: Kind::from(*b),
+        })?,
     }
 }
 
@@ -414,7 +425,7 @@ fn instantiate_left<'ctx>(
             let theta = instantiate_right(&from.fetch(state), &beta1, state, gamma)?;
             let delta = instantiate_left(
                 &beta2,
-                &to.fetch(state).apply_context(state, &theta),
+                &to.fetch(state).apply_context(state, theta),
                 state,
                 theta,
             )?;
@@ -569,22 +580,33 @@ impl ::std::fmt::Display for Kind
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
     {
         match self {
-            Kind::Literal => f.write_str("literal"),
-            Kind::Product => f.write_str("product"),
-            Kind::Variable => f.write_str("variable"),
-            Kind::Existential => f.write_str("existential"),
-            Kind::Quantification => f.write_str("quantification"),
-            Kind::Function => f.write_str("function"),
+            Kind::Literal => f.write_str("a literal"),
+            Kind::Product => f.write_str("a product"),
+            Kind::Variable => f.write_str("a variable"),
+            Kind::Existential => f.write_str("an existential"),
+            Kind::Quantification => f.write_str("a quantification"),
+            Kind::Function => f.write_str("a function"),
         }
     }
 }
 
+#[allow(variant_size_differences)]
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Error
 {
     InvalidApplication
     {
         kind: Kind
+    },
+    InvalidSubtyping
+    {
+        kind_a: Kind, kind_b: Kind
+    },
+    CircularSubtyping
+    {
+        kind_a: Kind,
+        kind_b: Kind,
+        alpha: variable::Variable,
     },
 }
 
@@ -594,8 +616,14 @@ impl ::std::fmt::Display for Error
     {
         match self {
             Error::InvalidApplication { kind } => {
-                f.write_fmt(format_args!("cannot apply a {kind} type"))
+                f.write_fmt(format_args!("cannot apply {kind} type"))
             }
+            Error::InvalidSubtyping { kind_a, kind_b } => {
+                f.write_fmt(format_args!("{kind_a} is not a subtype of {kind_b}"))
+            }
+            Error::CircularSubtyping { kind_a, kind_b,alpha} => f.write_fmt(format_args!(
+                "cannot resolve subtyping relation from {kind_a} to {kind_b} as that would require instantiating {alpha} to {kind_b}"
+            )),
         }
     }
 }

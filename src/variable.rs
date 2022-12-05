@@ -15,7 +15,7 @@ fn id_from_name(
     name: &str,
 ) -> ::std::option::Option<::std::result::Result<u64, ::std::num::ParseIntError>>
 {
-    // An existential name is of the shape t{n},
+    // An existential name is of the shape ?{n},
     // where {n} is a whole, but existentials  are u64's,
     // therefore the first char must be discarded
     let id = name.get(1..)?;
@@ -32,10 +32,10 @@ impl PartialEq for Variable
             (Variable::Existential { id: alpha }, Variable::Existential { id: beta }) => {
                 alpha == beta
             }
-            (Variable::Named { name }, &Variable::Existential { id }) => match id_from_name(name) {
-                Some(Ok(alpha)) if alpha == id => true,
-                _ => false,
-            },
+            (Variable::Named { name }, &Variable::Existential { id }) => {
+                matches!(id_from_name(name),
+                Some(Ok(alpha)) if alpha == id)
+            }
             (existential, named) => named == existential,
         }
     }
@@ -47,7 +47,7 @@ impl ::std::fmt::Display for Variable
     {
         match self {
             Variable::Named { name } => f.write_str(name),
-            Variable::Existential { id } => f.write_fmt(format_args!("t{id}")),
+            Variable::Existential { id } => f.write_fmt(format_args!("?{id}")),
         }
     }
 }
