@@ -1,4 +1,3 @@
-#![feature(box_syntax)]
 #![deny(unsafe_code)]
 #![warn(
     clippy::all,
@@ -88,13 +87,13 @@ mod tests
     {
         assert_eq!(
             synthesize(Expression::Application {
-                function: box Expression::Abstraction {
+                function: Box::new(Expression::Abstraction {
                     parameter: "x",
-                    body: box Expression::Variable { name: "x" }
-                },
-                argument: box Expression::Literal {
+                    body: Box::new(Expression::Variable { name: "x" }),
+                }),
+                argument: Box::new(Expression::Literal {
                     literal: Literal::String("Foo"),
-                }
+                }),
             }),
             Ok(Type::Literal {
                 ty: ty::Literal::String
@@ -107,13 +106,13 @@ mod tests
     {
         assert_eq!(
             synthesize(Expression::Application {
-                function: box Expression::Abstraction {
+                function: Box::new(Expression::Abstraction {
                     parameter: "x",
-                    body: box Expression::Variable { name: "x" }
-                },
-                argument: box Expression::Literal {
-                    literal: Literal::Bool(true)
-                }
+                    body: Box::new(Expression::Variable { name: "x" }),
+                }),
+                argument: Box::new(Expression::Literal {
+                    literal: Literal::Bool(true),
+                }),
             }),
             Ok(Type::Literal {
                 ty: ty::Literal::Bool
@@ -127,7 +126,7 @@ mod tests
         assert_eq!(
             synthesize(Expression::Abstraction {
                 parameter: "x",
-                body: box Expression::Variable { name: "x" }
+                body: Box::new(Expression::Variable { name: "x" }),
             }),
             Ok(Type::Function {
                 from: intern(Type::Existential {
@@ -148,11 +147,11 @@ mod tests
         assert_eq!(
             synthesize_with_state(
                 Expression::Application {
-                    function: box Expression::Annotation {
-                        expr: box Expression::Abstraction {
+                    function: Box::new(Expression::Annotation {
+                        expr: Box::new(Expression::Abstraction {
                             parameter: "x",
-                            body: box Expression::Variable { name: "x" }
-                        },
+                            body: Box::new(Expression::Variable { name: "x" })
+                        }),
                         ty: Type::Quantification {
                             variable: Variable::Named { name: "t" },
                             codomain: Type::Function {
@@ -167,10 +166,10 @@ mod tests
                             }
                             .store(&mut state)
                         }
-                    },
-                    argument: box Expression::Literal {
+                    }),
+                    argument: Box::new(Expression::Literal {
                         literal: Literal::String("Foo")
-                    }
+                    })
                 },
                 &mut state
             ),
@@ -185,12 +184,12 @@ mod tests
     {
         assert_eq!(
             synthesize(Expression::Tuple {
-                first: box Expression::Literal {
-                    literal: Literal::String("foo")
-                },
-                second: box Expression::Literal {
-                    literal: Literal::Bool(true)
-                }
+                first: Box::new(Expression::Literal {
+                    literal: Literal::String("foo"),
+                }),
+                second: Box::new(Expression::Literal {
+                    literal: Literal::Bool(true),
+                }),
             }),
             Ok(Type::Product {
                 left: intern(Type::Literal {
@@ -208,16 +207,16 @@ mod tests
     {
         assert_eq!(
             synthesize(Expression::Application {
-                function: box Expression::Abstraction {
+                function: Box::new(Expression::Abstraction {
                     parameter: "x",
-                    body: box Expression::Tuple {
-                        first: box Expression::Variable { name: "x" },
-                        second: box Expression::Variable { name: "x" }
-                    }
-                },
-                argument: box Expression::Literal {
-                    literal: Literal::String("foo")
-                }
+                    body: Box::new(Expression::Tuple {
+                        first: Box::new(Expression::Variable { name: "x" }),
+                        second: Box::new(Expression::Variable { name: "x" }),
+                    }),
+                }),
+                argument: Box::new(Expression::Literal {
+                    literal: Literal::String("foo"),
+                }),
             }),
             Ok(Type::Product {
                 left: intern(Type::Literal {
@@ -235,19 +234,19 @@ mod tests
     {
         assert_eq!(
             synthesize(Expression::Application {
-                function: box Expression::Abstraction {
+                function: Box::new(Expression::Abstraction {
                     parameter: "x",
-                    body: box Expression::Tuple {
-                        first: box Expression::Variable { name: "x" },
-                        second: box Expression::Tuple {
-                            first: box Expression::Variable { name: "x" },
-                            second: box Expression::Variable { name: "x" }
-                        }
-                    }
-                },
-                argument: box Expression::Literal {
-                    literal: Literal::String("foo")
-                }
+                    body: Box::new(Expression::Tuple {
+                        first: Box::new(Expression::Variable { name: "x" }),
+                        second: Box::new(Expression::Tuple {
+                            first: Box::new(Expression::Variable { name: "x" }),
+                            second: Box::new(Expression::Variable { name: "x" }),
+                        }),
+                    }),
+                }),
+                argument: Box::new(Expression::Literal {
+                    literal: Literal::String("foo"),
+                }),
             }),
             Ok(Type::Product {
                 left: intern(Type::Literal {
@@ -273,11 +272,11 @@ mod tests
         assert_eq!(
             synthesize_with_state(
                 Expression::Application {
-                    function: box Expression::Annotation {
-                        expr: box Expression::Abstraction {
+                    function: Box::new(Expression::Annotation {
+                        expr: Box::new(Expression::Abstraction {
                             parameter: "x",
-                            body: box Expression::Variable { name: "x" }
-                        },
+                            body: Box::new(Expression::Variable { name: "x" })
+                        }),
                         ty: Type::Quantification {
                             variable: Variable::Named { name: "t" },
                             codomain: Type::Function {
@@ -292,15 +291,15 @@ mod tests
                             }
                             .store(&mut state)
                         }
-                    },
-                    argument: box Expression::Tuple {
-                        first: box Expression::Literal {
+                    }),
+                    argument: Box::new(Expression::Tuple {
+                        first: Box::new(Expression::Literal {
                             literal: Literal::String("foo")
-                        },
-                        second: box Expression::Literal {
+                        }),
+                        second: Box::new(Expression::Literal {
                             literal: Literal::Bool(true)
-                        }
-                    }
+                        })
+                    })
                 },
                 &mut state
             ),
@@ -324,15 +323,15 @@ mod tests
             synthesize_with_state(
                 Expression::Let {
                     name: "a",
-                    expr: box Expression::Literal {
+                    expr: Box::new(Expression::Literal {
                         literal: Literal::Bool(true)
-                    },
-                    body: box Expression::Application {
-                        function: box Expression::Annotation {
-                            expr: box Expression::Abstraction {
+                    }),
+                    body: Box::new(Expression::Application {
+                        function: Box::new(Expression::Annotation {
+                            expr: Box::new(Expression::Abstraction {
                                 parameter: "x",
-                                body: box Expression::Variable { name: "x" }
-                            },
+                                body: Box::new(Expression::Variable { name: "x" })
+                            }),
                             ty: Type::Quantification {
                                 variable: Variable::Named { name: "t" },
                                 codomain: Type::Function {
@@ -347,9 +346,9 @@ mod tests
                                 }
                                 .store(&mut state)
                             }
-                        },
-                        argument: box Expression::Variable { name: "a" }
-                    }
+                        }),
+                        argument: Box::new(Expression::Variable { name: "a" })
+                    })
                 },
                 &mut state
             ),
@@ -364,17 +363,17 @@ mod tests
     {
         assert_eq!(
             synthesize(Expression::Application {
-                function: box Expression::Let {
+                function: Box::new(Expression::Let {
                     name: "newid",
-                    expr: box Expression::Abstraction {
+                    expr: Box::new(Expression::Abstraction {
                         parameter: "x",
-                        body: box Expression::Variable { name: "x" }
-                    },
-                    body: box Expression::Variable { name: "newid" }
-                },
-                argument: box Expression::Literal {
-                    literal: Literal::String("Foo")
-                }
+                        body: Box::new(Expression::Variable { name: "x" }),
+                    }),
+                    body: Box::new(Expression::Variable { name: "newid" }),
+                }),
+                argument: Box::new(Expression::Literal {
+                    literal: Literal::String("Foo"),
+                }),
             }),
             Ok(Type::Literal {
                 ty: ty::Literal::String
@@ -391,11 +390,11 @@ mod tests
             synthesize_with_state(
                 Expression::Let {
                     name: "newid",
-                    expr: box Expression::Annotation {
-                        expr: box Expression::Abstraction {
+                    expr: Box::new(Expression::Annotation {
+                        expr: Box::new(Expression::Abstraction {
                             parameter: "x",
-                            body: box Expression::Variable { name: "x" }
-                        },
+                            body: Box::new(Expression::Variable { name: "x" })
+                        }),
                         ty: Type::Quantification {
                             variable: Variable::Named { name: "t" },
                             codomain: Type::Function {
@@ -410,21 +409,21 @@ mod tests
                             }
                             .store(&mut state)
                         }
-                    },
-                    body: box Expression::Tuple {
-                        first: box Expression::Application {
-                            function: box Expression::Variable { name: "newid" },
-                            argument: box Expression::Literal {
+                    }),
+                    body: Box::new(Expression::Tuple {
+                        first: Box::new(Expression::Application {
+                            function: Box::new(Expression::Variable { name: "newid" }),
+                            argument: Box::new(Expression::Literal {
                                 literal: Literal::String("foo")
-                            }
-                        },
-                        second: box Expression::Application {
-                            function: box Expression::Variable { name: "newid" },
-                            argument: box Expression::Literal {
+                            })
+                        }),
+                        second: Box::new(Expression::Application {
+                            function: Box::new(Expression::Variable { name: "newid" }),
+                            argument: Box::new(Expression::Literal {
                                 literal: Literal::Bool(true)
-                            }
-                        }
-                    }
+                            })
+                        })
+                    })
                 },
                 &mut state
             ),
