@@ -432,7 +432,9 @@ fn instantiate_left<'ctx>(
 
             Ok(delta)
         }
-        _ => todo!("Handle instantiating left an invalid type"),
+        _ => Err(Error::InvalidLeftInstantiation {
+            kind: Kind::from(*b),
+        })?,
     }
 }
 
@@ -545,7 +547,9 @@ fn instantiate_right<'ctx>(
 
             delta
         }
-        _ => todo!("Handle instantiating right an invalid type"),
+        _ => Err(Error::InvalidRightInstantiation {
+            kind: Kind::from(*a),
+        })?,
     }
 }
 
@@ -608,6 +612,14 @@ pub(crate) enum Error
         kind_b: Kind,
         alpha: variable::Variable,
     },
+    InvalidLeftInstantiation
+    {
+        kind: Kind
+    },
+    InvalidRightInstantiation
+    {
+        kind: Kind
+    },
 }
 
 impl ::std::fmt::Display for Error
@@ -624,6 +636,12 @@ impl ::std::fmt::Display for Error
             Error::CircularSubtyping { kind_a, kind_b,alpha} => f.write_fmt(format_args!(
                 "cannot resolve subtyping relation from {kind_a} to {kind_b} as that would require instantiating {alpha} to {kind_b}"
             )),
+            Error::InvalidLeftInstantiation { kind } => {
+                f.write_fmt(format_args!("cannot instantiate {kind} type on the left"))
+            }
+            Error::InvalidRightInstantiation { kind } => {
+                f.write_fmt(format_args!("cannot instantiate {kind} type on the right"))
+            }
         }
     }
 }
