@@ -4,10 +4,8 @@ use crate::{context, expression, intern, state, variable};
 pub(crate) enum Literal
 {
     Unit,
-    Bool,
-    Int,
-    Float,
-    Char,
+    Boolean,
+    Number,
     String,
 }
 

@@ -74,7 +74,7 @@ mod tests
     {
         assert_eq!(
             synthesize(Expression::Literal {
-                literal: Literal::String("Foo"),
+                literal: Literal::String,
             }),
             Ok(Type::Literal {
                 ty: ty::Literal::String
@@ -92,7 +92,7 @@ mod tests
                     body: Box::new(Expression::Variable { name: "x" }),
                 }),
                 argument: Box::new(Expression::Literal {
-                    literal: Literal::String("Foo"),
+                    literal: Literal::String,
                 }),
             }),
             Ok(Type::Literal {
@@ -111,11 +111,11 @@ mod tests
                     body: Box::new(Expression::Variable { name: "x" }),
                 }),
                 argument: Box::new(Expression::Literal {
-                    literal: Literal::Bool(true),
+                    literal: Literal::Boolean,
                 }),
             }),
             Ok(Type::Literal {
-                ty: ty::Literal::Bool
+                ty: ty::Literal::Boolean
             })
         )
     }
@@ -168,7 +168,7 @@ mod tests
                         }
                     }),
                     argument: Box::new(Expression::Literal {
-                        literal: Literal::String("Foo")
+                        literal: Literal::String
                     })
                 },
                 &mut state
@@ -185,10 +185,10 @@ mod tests
         assert_eq!(
             synthesize(Expression::Tuple {
                 first: Box::new(Expression::Literal {
-                    literal: Literal::String("foo"),
+                    literal: Literal::String,
                 }),
                 second: Box::new(Expression::Literal {
-                    literal: Literal::Bool(true),
+                    literal: Literal::Boolean,
                 }),
             }),
             Ok(Type::Product {
@@ -196,7 +196,7 @@ mod tests
                     ty: ty::Literal::String
                 }),
                 right: intern(Type::Literal {
-                    ty: ty::Literal::Bool
+                    ty: ty::Literal::Boolean
                 })
             })
         )
@@ -215,7 +215,7 @@ mod tests
                     }),
                 }),
                 argument: Box::new(Expression::Literal {
-                    literal: Literal::String("foo"),
+                    literal: Literal::String,
                 }),
             }),
             Ok(Type::Product {
@@ -245,7 +245,7 @@ mod tests
                     }),
                 }),
                 argument: Box::new(Expression::Literal {
-                    literal: Literal::String("foo"),
+                    literal: Literal::String,
                 }),
             }),
             Ok(Type::Product {
@@ -294,10 +294,10 @@ mod tests
                     }),
                     argument: Box::new(Expression::Tuple {
                         first: Box::new(Expression::Literal {
-                            literal: Literal::String("foo")
+                            literal: Literal::String
                         }),
                         second: Box::new(Expression::Literal {
-                            literal: Literal::Bool(true)
+                            literal: Literal::Boolean
                         })
                     })
                 },
@@ -324,7 +324,7 @@ mod tests
                 Expression::Let {
                     name: "a",
                     expr: Box::new(Expression::Literal {
-                        literal: Literal::Bool(true)
+                        literal: Literal::Boolean
                     }),
                     body: Box::new(Expression::Application {
                         function: Box::new(Expression::Annotation {
@@ -353,7 +353,7 @@ mod tests
                 &mut state
             ),
             Ok(Type::Literal {
-                ty: ty::Literal::Bool
+                ty: ty::Literal::Boolean
             })
         )
     }
@@ -372,7 +372,7 @@ mod tests
                     body: Box::new(Expression::Variable { name: "newid" }),
                 }),
                 argument: Box::new(Expression::Literal {
-                    literal: Literal::String("Foo"),
+                    literal: Literal::String,
                 }),
             }),
             Ok(Type::Literal {
@@ -414,13 +414,13 @@ mod tests
                         first: Box::new(Expression::Application {
                             function: Box::new(Expression::Variable { name: "newid" }),
                             argument: Box::new(Expression::Literal {
-                                literal: Literal::String("foo")
+                                literal: Literal::String
                             })
                         }),
                         second: Box::new(Expression::Application {
                             function: Box::new(Expression::Variable { name: "newid" }),
                             argument: Box::new(Expression::Literal {
-                                literal: Literal::Bool(true)
+                                literal: Literal::Boolean
                             })
                         })
                     })
@@ -432,7 +432,7 @@ mod tests
                     ty: ty::Literal::String
                 }),
                 right: intern(Type::Literal {
-                    ty: ty::Literal::Bool
+                    ty: ty::Literal::Boolean
                 })
             })
         )
